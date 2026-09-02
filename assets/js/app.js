@@ -70,6 +70,23 @@ function hashColor(str){
   const pastels=['#e8d5c4','#d5e8c4','#c4d5e8','#e8c4d5','#d8c4e8','#c4e8d5','#f0d5b8','#c8e0f0'];
   return pastels[h % pastels.length];
 }
+function optimizeMiniImage(url){
+  if(!url || typeof url!=='string') return url;
+  // same logic as homepage/templatetags/extras.py _optimize_vk_image but mini size 200x200
+  try{
+    if(url.includes('vkuserphoto.ru') || url.includes('userapi.com')){
+      // VK: cs=360x0 or cs=540x540 -> replace with 200x200 for miniapp speed
+      if(url.match(/cs=\d+x\d+/)) return url.replace(/cs=\d+x\d+/, 'cs=200x200');
+      const sep = url.includes('?') ? '&' : '?';
+      return url + sep + 'cs=200x200';
+    }
+    if(url.includes('cdn.qtickets.tech')) return url; // keep as is, hash bound
+    if(url.includes('ponominalu.ru/media/i/')) return url.replace(/\/media\/i\/\d+x\d+\//, '/media/i/400x300/');
+    if(url.includes('live.mts.ru/image/')) return url; // keep
+    if(url.includes('mycdn.me') && url.includes('size=')) return url.replace(/size=[^&]+/, 'size=200x200');
+  }catch(e){}
+  return url;
+}
 
 function extractSlug(urlOrSlug){
   if(!urlOrSlug) return '';
@@ -406,7 +423,8 @@ function cardHTML(c, opts={}){
   }
   const venue = esc(c.place_name||c.place?.name||'');
   const bg = c.bg_color || hashColor(c.slug||venue||String(c.id));
-  const img = c.main_image? `<img class="card-img" src="${esc(c.main_image)}" alt="${esc(c.title)}" loading="lazy">` : `<div class="card-img-placeholder"></div>`;
+  const imgUrl = c.main_image ? optimizeMiniImage(c.main_image) : '';
+  const img = imgUrl? `<img class="card-img" src="${esc(imgUrl)}" alt="${esc(c.title)}" loading="lazy" decoding="async">` : `<div class="card-img-placeholder"></div>`;
   const slug = c.slug || extractSlug(c.url||'');
   const href = slug ? `https://permlive.ru/event/${esc(slug)}/` : '#';
   // date text: upcoming -> time if today else short date
@@ -644,50 +662,42 @@ function openSheet(c){
 }
 function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverlay.classList.remove('sheet-overlay--show'); }
 
-// Maps — Yandex via PermLiveMaps (site logic) + Leaflet fallback
-let leafletMap=null;
+// Maps — Yandex only (как на /map/, без Leaflet мока)
 let yandexReady=false;
 
 function initMap(){
-  if(leafletMap || yandexReady) return;
-  // If site's events-map.js already initialized Yandex (PermLiveMaps), reuse it
+  if(yandexReady) return;
   if(window.PermLiveMaps && window.PermLiveMaps.loadCore){
     window.PermLiveMaps.loadCore().then(function(){
       yandexReady=true;
+      // site's events-map.js уже создал карту в #map, используем его API
       state.map = {
-        setCenter: function(coords,zoom){ /* events-map handles via setLocation internally */ },
-        setView: function(coords,zoom){},
-        invalidateSize: function(){}
+        setCenter: function(){},
+        setView: function(){},
+        invalidateSize: function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }
       };
-      addCommonControls();
       refreshMapMarkers();
     }).catch(function(e){
-      console.warn('Yandex PermLiveMaps failed, fallback Leaflet', e);
-      initLeaflet();
+      console.warn('Yandex load failed', e);
+      showMapError();
     });
-    // also listen for pl:map-ready from events-map
     els.mapEl.addEventListener('pl:map-ready', function(){
       yandexReady=true;
       refreshMapMarkers();
     });
-    // fallback timeout
-    setTimeout(function(){ if(!yandexReady) initLeaflet(); }, 3000);
+    setTimeout(function(){ if(!yandexReady){ showMapError(); } }, 5000);
     return;
   }
-  initLeaflet();
+  showMapError();
 }
-
-function initLeaflet(){
-  if(leafletMap) return;
-  const center=[58.0105,56.2502];
-  // ensure Yandex container cleaned if previously used
-  if(els.mapEl) els.mapEl.innerHTML='';
-  leafletMap = L.map(els.mapEl,{zoomControl:false, attributionControl:false}).setView(center,12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OSM'}).addTo(leafletMap);
-  state.map=leafletMap;
-  addCommonControls();
-  try{ leafletMap.on('click',()=> { const dd=$('.map-dropdown'); if(dd) dd.classList.remove('map-dropdown--open'); }); }catch(e){}
-  refreshMapMarkers();
+function showMapError(){
+  if(els.mapEl && !els.mapEl.querySelector('.map-error')){
+    const err=document.createElement('div');
+    err.className='map-error';
+    err.style.cssText='padding:40px 20px;text-align:center;color:#999';
+    err.innerHTML='<p>Карта Яндекс не загрузилась.<br>Проверьте ключ и Referer для github.io в кабинете Яндекс.</p>';
+    els.mapEl.appendChild(err);
+  }
 }
 
 let controlsAdded=false;
@@ -714,14 +724,14 @@ function addCommonControls(){
 }
 
 function refreshMapMarkers(){
-  // Prefer site's Yandex clusterer via PermLiveMaps if available
+  // Yandex - site logic via PermLiveMaps.setEvents (как на /map/ - без мока Leaflet)
   let listY=[];
   if(state.range) listY=state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
   else if(state.selectedDate) listY=state.concerts.filter(c=> c.date===state.selectedDate);
   else listY=state.concerts.filter(c=> c.date===state.todayISO);
   if(state.mapMode==='free') listY=listY.filter(c=> c.price===0);
   if(state.mapMode==='paid') listY=listY.filter(c=> c.is_paid);
-  if(window.PermLiveMaps && typeof window.PermLiveMaps.setEvents==='function' && yandexReady){
+  if(window.PermLiveMaps && typeof window.PermLiveMaps.setEvents==='function'){
     try{
       const evts=listY.map(c=>{
         const coords=c.place?.coordinates||'';
@@ -734,16 +744,18 @@ function refreshMapMarkers(){
           image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false
         };
       }).filter(e=>e.coordinates[0] && e.coordinates[1]);
-      // keep PermLiveMapData in sync for map logic (emotions etc)
       window.PermLiveMapData = window.PermLiveMapData||{};
       window.PermLiveMapData.events=evts;
       window.PermLiveMapData.today=state.todayISO;
       window.PermLiveMapData.defaultDate=state.selectedDate||state.todayISO;
       window.PermLiveMapData.emotionDate=state.todayISO;
       window.__PermLiveMapCurrentDate = state.selectedDate||state.todayISO;
-      window.PermLiveMaps.setEvents(evts, {recenter:true});
-      // update map date button text
-      const mapDateBtn=document.querySelector('.map-date-btn .pl-map-date-btn__text');
+      if(yandexReady) window.PermLiveMaps.setEvents(evts, {recenter:true});
+      else {
+        // if map not ready yet, store for later
+        window.PermLiveMapData.events=evts;
+      }
+      const mapDateBtn=document.querySelector('.pl-map-date-btn__text');
       if(mapDateBtn){
         const txt = state.selectedDate ? fmtHeaderDate(parseISO(state.selectedDate)) : 'Сегодня';
         mapDateBtn.textContent=txt;
@@ -751,67 +763,7 @@ function refreshMapMarkers(){
       return;
     }catch(e){ console.warn('PermLiveMaps setEvents failed', e); }
   }
-  const isLeaflet = !!leafletMap;
-  const isYandex = !!(yandexMap && window.ymaps3);
-  const isYandex2 = !!(yandexMap && window.ymaps && ymaps.Map && yandexMap.geoObjects);
-  if(isLeaflet){
-    state.mapMarkers.forEach(m=> leafletMap.removeLayer(m));
-    state.mapMarkers=[];
-  }
-  if(isYandex){
-    try{ state.mapMarkers.forEach(m=> yandexMap.removeChild(m)); }catch(e){}
-    state.mapMarkers=[];
-  }
-  if(isYandex2){
-    yandexMap.geoObjects.removeAll();
-    state.mapMarkers=[];
-  }
-  let list=[];
-  if(state.range) list=state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
-  else list=state.concerts.filter(c=> c.date===state.selectedDate);
-  if(state.mapMode==='free') list=list.filter(c=> c.price===0);
-  if(state.mapMode==='paid') list=list.filter(c=> c.is_paid);
-  const byPlace={};
-  list.forEach(c=>{
-    const key=c.place?.coordinates||'';
-    if(!key) return;
-    (byPlace[key]||(byPlace[key]=[])).push(c);
-  });
-  Object.entries(byPlace).forEach(([coords, arr])=>{
-    const [lat,lng]=coords.split(',').map(Number);
-    if(!isFinite(lat)||!isFinite(lng)) return;
-    if(isLeaflet){
-      const el=document.createElement('div');
-      const paid=arr.some(a=>a.is_paid);
-      el.className='pl-map-pin'+(paid?' pl-map-pin--paid':'');
-      el.innerHTML=`<span class="pl-map-pin__time">${esc(arr[0].time||'')}</span><span class="pl-map-pin__title">${esc(arr.length>1? arr[0].place_name+' +'+(arr.length-1) : arr[0].title.slice(0,18))}</span>`;
-      const icon=L.divIcon({className:'', html: el, iconSize:[0,0], iconAnchor:[0,0]});
-      const marker=L.marker([lat,lng],{icon}).addTo(leafletMap);
-      const slug0=arr[0].slug||extractSlug(arr[0].url||'');
-      const popupContent = arr.map(c=>{ const s=c.slug||extractSlug(c.url||''); return `<div style="margin:6px 0"><b>${esc(c.title)}</b><br><small>${esc(c.time||'')} · ${esc(c.place_name||'')} ${c.price===0?'· бесплатно': c.price? `· ${c.price}₽`:''}</small><br><a href="https://permlive.ru/event/${esc(s)}/" target="_blank" style="color:#e14425">Открыть →</a></div>`}).join('<hr style="margin:6px 0;opacity:.2">');
-      marker.bindPopup(`<div style="min-width:180px;max-width:260px"><b>${esc(arr[0].place_name||'')}</b>${arr[0].place?.address? `<br><small>${esc(arr[0].place.address)}</small>`:''}<hr style="opacity:.2">${popupContent}</div>`);
-      state.mapMarkers.push(marker);
-    } else if(isYandex2){
-      const pm = new ymaps.Placemark([lat,lng], {
-        balloonContent: arr.map(c=>{ const s=c.slug||extractSlug(c.url||''); return `<b>${esc(c.title)}</b> ${esc(c.time||'')} <a href="https://permlive.ru/event/${esc(s)}/" target="_blank">Открыть</a>`}).join('<br>')
-      }, { preset: arr.some(a=>a.is_paid)? 'islands#redIcon':'islands#blueIcon'});
-      yandexMap.geoObjects.add(pm);
-      state.mapMarkers.push(pm);
-    } else if(isYandex){
-      try{
-        const el=document.createElement('div');
-        el.className='pl-map-pin'+(arr.some(a=>a.is_paid)?' pl-map-pin--paid':'');
-        el.innerHTML=`<span class="pl-map-pin__time">${esc(arr[0].time||'')}</span><span>${esc(arr[0].place_name)}</span>`;
-        const marker = new ymaps3.YMapMarker({coordinates:[lng,lat]}, el);
-        yandexMap.addChild(marker);
-        el.onclick=()=> openSheet(arr[0]);
-        state.mapMarkers.push(marker);
-      }catch(e){}
-    }
-  });
-  if(list.length && state.tab==='map'){
-    setTimeout(()=> { try{ state.map.invalidateSize(); }catch(e){} },120);
-  }
+  // Yandex not ready yet — will retry on pl:map-ready
 }
 
 async function loadMapForDate(iso){

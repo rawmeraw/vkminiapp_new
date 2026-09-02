@@ -103,9 +103,9 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .horizontal-slider-arrow.hidden{opacity:0;pointer-events:none}
 @media(max-width:768px){.horizontal-slider-arrow{display:none}}
 
-/* Card — info slightly smaller than image like site: image 180, info 110, card 290 */
-.concert-card{flex:0 0 170px;width:170px;height:290px;border-radius:var(--card-radius);overflow:hidden;background:var(--card-bg-color,#f0f0f0);display:flex;flex-direction:column;text-decoration:none;color:var(--dark)}
-@media(min-width:768px){.concert-card{flex:0 0 190px;width:190px;height:300px}}
+/* Card — info slightly smaller than image like site: image 180, info 100-110, card 290 */
+.concert-card{flex:0 0 170px;width:170px;min-height:290px;border-radius:var(--card-radius);overflow:hidden;background:var(--card-bg-color,#f0f0f0);display:flex;flex-direction:column;text-decoration:none;color:var(--dark)}
+@media(min-width:768px){.concert-card{flex:0 0 190px;width:190px;min-height:300px}}
 .card-img-wrapper{position:relative;width:100%;height:180px;flex:0 0 180px;overflow:hidden;background:linear-gradient(135deg,#e8e8e8,#f5f5f5)}
 @media(min-width:768px){.card-img-wrapper{height:190px;flex:0 0 190px}}
 .card-img{width:100%;height:100%;object-fit:cover;display:block}
@@ -121,8 +121,8 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .card-rating-badge.featured i{color:#222}
 .card-rank{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.8);color:#fff;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 .top-10 .card-rank{display:flex}
-.card-info{padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px;height:110px;flex:0 0 110px;background:var(--card-bg-color,#f0f0f0)}
-@media(min-width:768px){.card-info{height:110px;flex:0 0 110px}}
+.card-info{padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px;flex:1;min-height:100px;background:var(--card-bg-color,#f0f0f0)}
+@media(min-width:768px){.card-info{min-height:100px}}
 .card-title{font-weight:600;font-size:13px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
 .card-meta{font-size:11px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-rating{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;background:rgba(255,255,255,.75);padding:4px 8px;border-radius:999px;align-self:flex-start;margin-top:4px}
@@ -138,13 +138,14 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .see-all-icon{font-size:22px;margin-bottom:6px}
 .see-all-text{font-weight:700;font-size:13px}
 .see-all-count{font-size:11px;opacity:.9}
-/* hover: tags/rating not red */
+/* hover: tags/rating not red, Смотреть все not black */
 .concert-card:hover .tag,.concert-card:hover .card-rating,.concert-card:hover .card-rating-badge,.concert-card:hover .card-rating-badge i{color:inherit}
 .concert-card:hover .card-rating i{color:#ffc107}
 .concert-card:hover .tag{color:#333}
 .concert-card:hover .card-rating-badge{color:#222}
 .concert-card:hover .card-rating-badge i{color:#ffc107}
 .concert-card:hover .card-rating-badge.featured i{color:#222}
+.section-count-badge:hover{color:var(--red) !important;background:rgba(225,68,37,.15) !important}
 /* calendar empty */
 .calendar-date--empty{opacity:.35;cursor:not-allowed;background:#f0f0f0!important;color:#999!important}
 .calendar-date--empty .calendar-date__wd{color:#bbb!important}
