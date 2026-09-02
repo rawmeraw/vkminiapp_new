@@ -17,14 +17,14 @@
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
 
-  <!-- Yandex Maps JS API v3 -->
-  <script>window.PermLiveMapSettings={apiKey:'7347cf60-a8c5-4125-81b2-07d7365c0bf8'}</script>
-  <script src="https://api-maps.yandex.ru/v3/?apikey=7347cf60-a8c5-4125-81b2-07d7365c0bf8&lang=ru_RU"></script>
-  <!-- Leaflet fallback if Yandex not loaded -->
+  <!-- Yandex Maps JS API v3 — ключ из zhivoe/settings.py:398 -->
+  <script>window.PermLiveMapSettings={apiKey:'7347cf60-a8c5-4125-81b2-07d7365c0bf8'};window.PermLiveMapData={events:[],today:'',defaultDate:'',emotionDate:'',csrf:'',emotionMe:{is_auth:false}};</script>
+  <!-- Leaflet fallback (Yandex primary) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
   <link rel="stylesheet" href="./assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/maps.css">
 </head>
 <body>
   <!-- Header -->
@@ -138,6 +138,8 @@
   <!-- Toast -->
   <div id="toast" class="pl-toast"></div>
 
+  <script src="./assets/js/maps/map-core.js"></script>
+  <script src="./assets/js/maps/events-map.js"></script>
   <script type="module" src="./assets/js/app.js"></script>
 </body>
 </html>
