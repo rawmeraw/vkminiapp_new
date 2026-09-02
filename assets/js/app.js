@@ -1,4 +1,4 @@
-/* Permlive VK Mini App — app.js (8 fixes + date/range logic + Yandex) */
+/* Permlive VK Mini App — app.js (real API, timezone fix, 2 months, timeline separate) */
 const API_BASE = 'https://permlive.ru';
 const bridge = window.vkBridge;
 try{ bridge && bridge.send('VKWebAppInit'); }catch(e){}
@@ -38,22 +38,19 @@ const els = {
   mapEl: $('#map'),
 };
 
-const state = {
-  tab: 'feed',
-  selectedDate: toISO(new Date()),
-  range: null, // {start,end} ISO or null
-  datesWithEvents: new Set(),
-  concerts: [],
-  filtered: [],
-  query: '',
-  map: null,
-  mapMarkers: [],
-  mapMode: 'all',
-  todayISO: toISO(new Date()),
-  timelineMode: null, // null | 'top10' | 'upcoming' | 'date' | 'range'
-};
-
-function toISO(d){ return d.toISOString().slice(0,10); }
+// --- timezone Ekaterinburg (Asia/Yekaterinburg UTC+5) ---
+function ekbTodayISO(){
+  // Use Intl to get date in Ekaterinburg
+  const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Yekaterinburg', year:'numeric', month:'2-digit', day:'2-digit'});
+  return fmt.format(new Date());
+}
+function ekbToISO(d){ // d is local Date, convert via Ekaterinburg? For parsing we treat ISO as calendar date
+  return d.toISOString().slice(0,10);
+}
+function toISO(d){ // local calendar date without timezone shift
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${da}`;
+}
 function parseISO(s){ const [y,m,day]=s.split('-').map(Number); return new Date(y,m-1,day); }
 function fmtDay(d){ const m=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']; return `${d.getDate()} ${m[d.getMonth()]}`; }
 function fmtWeekday(d){ const w=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']; return w[d.getDay()]; }
@@ -67,112 +64,116 @@ function toast(msg){
   setTimeout(()=>els.toast.classList.remove('pl-toast--show'),2200);
 }
 
-// Mock with paid-weighted rating + real bg colors
-function mockConcerts(n=48){
-  const places=[
-    {name:'Дом культуры',slug:'dk',coords:'58.0105,56.2502',color:'#e8d5c4',address:'ул. Ленина 1'},
-    {name:'Мичурин',slug:'michurin',coords:'58.0167,56.2833',color:'#d5e8c4',address:'ул. Мира 45'},
-    {name:'Ё-бар',slug:'yo-bar',coords:'57.995,56.235',color:'#c4d5e8',address:'ул. Газеты Звезда 27'},
-    {name:'Филармония',slug:'filarmonia',coords:'58.015,56.25',color:'#e8c4d5',address:'ул. Куйбышева 14'},
-    {name:'Бирман',slug:'birman',coords:'58.005,56.27',color:'#d8c4e8',address:'ул. Монастырская 12'},
-  ];
-  const tags=['рок','поп','джаз','рэп','электроника','инди','метал','фолк'];
-  const titles=['Перемотка','Масло черного тмина','Алла Пугачева tribute','Ночные грузчики','Смешарики Live','Jazz de Paris','Три дня дождя','Кис-кис','Баста','Пикник'];
-  const pics=[
-    'https://picsum.photos/seed/pl1/400/400',
-    'https://picsum.photos/seed/pl2/400/400',
-    'https://picsum.photos/seed/pl3/400/400',
-    'https://picsum.photos/seed/pl4/400/400',
-    'https://picsum.photos/seed/pl5/400/400',
-  ];
-  const arr=[];
-  const base=new Date(); base.setHours(19,0,0,0);
-  for(let i=0;i<n;i++){
-    const d=new Date(base); d.setDate(base.getDate()+ Math.floor(i/2.2) );
-    const place=places[i%places.length];
-    const isPaid = i<7; // top weighted
-    const baseRating = 3 + (isPaid?2:0) + Math.random()*0.8 + Math.random()*0.4;
-    const rating = Math.min(6.5, baseRating).toFixed(1);
-    arr.push({
-      id:1000+i,
-      title:titles[i%titles.length] + (i>9? ` #${i}`:''),
-      slug:`event-${1000+i}`,
-      date: toISO(d),
-      time: `${String(18+ (i%4)).padStart(2,'0')}:00`,
-      place: {name:place.name, slug:place.slug, address:place.address, coordinates:place.coords},
-      place_name: place.name,
-      bg_color: place.color,
-      main_image: pics[i%pics.length],
-      price: (i%5===0?0: 600+ Math.floor(Math.random()*1800)),
-      cached_rating: rating,
-      display_rating: (Math.min(5, parseFloat(rating))).toFixed(1).replace(/\.0$/,''),
-      is_paid: isPaid,
-      tickets: 'https://permlive.ru',
-      tags:[{name:tags[i%tags.length]},{name:tags[(i+2)%tags.length]}],
-      description:'Живой концерт в Перми. Подробности, билеты и маршрут — на permlive.ru',
-    });
-  }
-  return arr.sort((a,b)=> a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+// deterministic pastel color fallback
+function hashColor(str){
+  let h=0; for(let i=0;i<str.length;i++) h=(h*31 + str.charCodeAt(i))>>>0;
+  const pastels=['#e8d5c4','#d5e8c4','#c4d5e8','#e8c4d5','#d8c4e8','#c4e8d5','#f0d5b8','#c8e0f0'];
+  return pastels[h % pastels.length];
 }
-let MOCK = mockConcerts(48);
 
-// API fetch
+function extractSlug(urlOrSlug){
+  if(!urlOrSlug) return '';
+  if(urlOrSlug.includes('/')){ // url like https://permlive.ru/event/slug/ or /event/slug/
+    const m=urlOrSlug.match(/\/event\/([^\/\?#]+)/);
+    if(m) return m[1];
+    const parts=urlOrSlug.split('/').filter(Boolean);
+    return parts[parts.length-1]||'';
+  }
+  return urlOrSlug;
+}
+
+const state = {
+  tab: 'feed',
+  selectedDate: ekbTodayISO(),
+  range: null,
+  datesWithEvents: new Set(),
+  concerts: [],
+  upcomingPool: [], // for upcoming slider
+  top10Pool: [], // sorted top10
+  filtered: [],
+  query: '',
+  map: null,
+  mapMarkers: [],
+  mapMode: 'all',
+  todayISO: ekbTodayISO(),
+  timelineMode: null,
+};
+
 async function fetchJSON(url){
   try{
     const r=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'}});
     if(!r.ok) throw new Error(r.status);
     return await r.json();
-  }catch(e){ return null; }
+  }catch(e){ console.warn('fetch failed', url, e); return null; }
 }
 
 async function loadData(){
+  // calendar dates from open API
   const cal = await fetchJSON(`${API_BASE}/api/calendar-dates/`);
-  if(cal && Array.isArray(cal.dates)){ state.datesWithEvents=new Set(cal.dates); if(cal.today) state.todayISO=cal.today; state.selectedDate=cal.today||state.todayISO; }
-  else { state.datesWithEvents=new Set(MOCK.map(c=>c.date)); }
-  // try map events + концерты api for full pool
+  if(cal && Array.isArray(cal.dates)){
+    state.datesWithEvents=new Set(cal.dates);
+    if(cal.today) state.todayISO=cal.today;
+    state.selectedDate=cal.today||state.todayISO;
+  } else {
+    // will fill after concerts load
+  }
+  // fetch concerts pool — use open api /api/concerts/?limit=500
   let pool = [];
-  const mapJson = await fetchJSON(`${API_BASE}/map/events/?date=${state.selectedDate}`);
-  if(mapJson && Array.isArray(mapJson.events)) pool=pool.concat(mapJson.events.map(normalizeApiEvent));
-  const api = await fetchJSON(`${API_BASE}/api/concerts/?limit=200`);
+  const api = await fetchJSON(`${API_BASE}/api/concerts/?limit=500`);
   if(api){
     const results = Array.isArray(api.results)?api.results: Array.isArray(api)?api: [];
-    pool=pool.concat(results.map(normalizeApiConcert));
+    pool = results.map(normalizeApiConcert).filter(c=>c.slug && c.date);
   }
-  if(pool.length){
-    // dedup by id/slug
-    const seen=new Set(); const uniq=[];
-    [...pool, ...MOCK].forEach(c=>{ const k=c.slug||c.id; if(!seen.has(k)){ seen.add(k); uniq.push(c); } });
-    state.concerts = uniq.sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
-  } else {
-    state.concerts = MOCK;
+  if(!pool.length){
+    // fallback to map events for splicing dates
+    const todayEvents = await fetchJSON(`${API_BASE}/map/events/?date=${state.todayISO}`);
+    if(todayEvents && Array.isArray(todayEvents.events)){
+      pool = todayEvents.events.map(normalizeApiEvent).filter(c=>c.slug);
+    }
   }
+  // filter out broken
+  state.concerts = pool.filter(c=>c.id && c.title && c.date);
+  // sort future only for top10/upcoming
   if(!state.datesWithEvents.size) state.datesWithEvents=new Set(state.concerts.map(c=>c.date));
+  // precompute top10 pool sorted by rating
+  const future = state.concerts.filter(c=> c.date >= state.todayISO);
+  state.top10Pool = [...future].sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
 }
 
 function normalizeApiConcert(c){
+  const slug = c.slug || extractSlug(c.url||c.link||'');
+  const placeName = c.place?.name || c.place_name || '';
+  const bg = c.bg_color || c.place?.bg_color || hashColor(slug||placeName||String(c.id));
+  const img = c.main_image || c.image || c.images?.[0]?.url || '';
   return {
-    id:c.id, title:c.title||c.name, slug:c.slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
-    place: c.place||{name:c.place_name||c.place||'Площадка', coordinates:c.coordinates||'58.0105,56.2502', address:c.address||''}, place_name: c.place?.name||c.place_name||c.place||'',
-    bg_color: c.bg_color||c.place?.bg_color||'#e8e8e8', main_image: c.main_image||c.image||c.place?.avatar||'', price: c.price ?? '',
+    id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
+    place: c.place||{name:placeName, coordinates:c.coordinates||'58.0105,56.2502', address:c.address||''}, place_name: placeName,
+    bg_color: bg, main_image: img, price: c.price ?? '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
-    is_paid: !!c.is_paid, tickets:c.tickets||'', tags: c.tags||[], description:c.description||''
+    is_paid: !!c.is_paid, tickets:c.tickets||c.link||'', tags: c.tags||[], description:c.description||''
   };
 }
 function normalizeApiEvent(e){
+  const slug = e.slug || extractSlug(e.url||'');
+  const placeName = e.place || e.place_name || '';
+  const bg = e.bg_color || hashColor(slug||placeName||String(e.id));
+  const img = e.image || e.main_image || '';
   return {
-    id:e.id||Math.floor(Math.random()*1e6), title:e.title, slug:e.slug, date:e.date, time:(e.time||'19:00').slice(0,5),
-    place:e.place||{name:e.place_name, coordinates:e.coordinates, address:e.address}, place_name:e.place?.name||e.place_name||'',
-    bg_color:e.bg_color||'#e8e8e8', main_image:e.image||e.main_image||'', price:e.price ?? '', cached_rating:String(e.rating||e.cached_rating||'4.0'), display_rating:String(e.rating||'4.0'),
-    is_paid:!!e.is_paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||''
+    id:e.id||Math.floor(Math.random()*1e6), title:e.title, slug, date:e.date, time:(e.time||'19:00').slice(0,5),
+    place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : '58.0105,56.2502'), address:e.address||''}, place_name:placeName,
+    bg_color:bg, main_image:img, price:e.price ?? '', cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
+    is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||''
   };
 }
 
-// Calendar strip
+// Calendar strip — 60 days (2 months) from today
 function renderCalendarStrip(){
   const inner=els.calendarInner;
   inner.innerHTML='';
   const today=parseISO(state.todayISO);
-  for(let i=0;i<30;i++){
+  const totalDays = 60;
+  for(let i=0;i<totalDays;i++){
     const d=new Date(today); d.setDate(today.getDate()+i);
     const iso=toISO(d);
     const inRange = isInRange(iso);
@@ -195,16 +196,24 @@ function isInRange(iso){
 }
 
 function handleCalendarClick(iso){
-  // simple single date; if already selected same date -> clear range and show feed
-  // if range mode active via month modal, handle there. Horizontal: click selects single, long press could start range — keep simple single
-  if(state.range && iso===state.range.start && iso===state.range.end){
+  // clicking same selected single date -> cancel to main
+  if(!state.range && iso===state.selectedDate && state.todayISO!==iso){
     clearDateFilter();
     return;
   }
-  // if user has range, clicking new date replaces range with single
-  state.range=null;
-  state.selectedDate=iso;
-  $$('.calendar-date').forEach(el=> el.classList.toggle('selected', el.dataset.date===iso));
+  // clicking inside range -> maybe cancel? For simplicity, single click replaces
+  if(state.range && iso>=state.range.start && iso<=state.range.end && state.range.start!==state.range.end){
+    // clicking inside range selects that single date
+    state.range=null;
+    state.selectedDate=iso;
+    state.timelineMode=null;
+  } else {
+    // single date selection
+    state.range=null;
+    state.selectedDate=iso;
+    state.timelineMode=null;
+  }
+  renderCalendarStrip();
   applyFilter();
   loadMapForDate(iso);
   const sel=document.querySelector(`.calendar-date[data-date="${iso}"]`);
@@ -232,7 +241,7 @@ function updateArrowVisibility(){
   right.onclick=()=> inner.scrollBy({left:240,behavior:'smooth'});
 }
 
-// Month modal with range support
+// Month modal — 2 months logic, show current month + next
 let calView=null;
 let rangeStart=null;
 function openCalendar(){
@@ -252,10 +261,11 @@ function renderMonth(){
   const host=els.calModal.querySelector('.pl-map-calendar-modal__cal');
   const y=calView.y, m=calView.m;
   const today=parseISO(state.todayISO);
-  const maxDate = (()=>{ const s=[...state.datesWithEvents].sort().pop(); return s?parseISO(s):null; })();
+  // max = today + 90 days (from API) or today+60
+  const maxDate = parseISO(state.todayISO); maxDate.setDate(maxDate.getDate()+90);
   const monthsNom=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   const atStart = y < today.getFullYear() || (y===today.getFullYear() && m<=today.getMonth());
-  const atEnd = maxDate && (y>maxDate.getFullYear() || (y===maxDate.getFullYear() && m>=maxDate.getMonth()));
+  const atEnd = y>maxDate.getFullYear() || (y===maxDate.getFullYear() && m>=maxDate.getMonth());
   host.innerHTML='';
   const head=document.createElement('div'); head.className='pl-map-mcal__head';
   const prev=document.createElement('button'); prev.className='pl-map-mcal__nav'; prev.innerHTML='<i class="fas fa-chevron-left" style="font-size:12px"></i>';
@@ -275,7 +285,8 @@ function renderMonth(){
   for(let i=0;i<offset;i++){ const e=document.createElement('div'); e.style.aspectRatio='1'; grid.appendChild(e); }
   for(let d=1;d<=daysIn;d++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const has=state.datesWithEvents.has(ds);
+    const has = true; // allow any date within 2 months, even if no events yet, but disable past
+    const past = ds < state.todayISO;
     const wd=new Date(y,m,d).getDay();
     const btn=document.createElement('button'); btn.className='pl-map-mcal__day'; if(wd===0||wd===6) btn.classList.add('pl-map-mcal__day--weekend');
     btn.innerHTML=`<span>${d}</span>`;
@@ -283,31 +294,28 @@ function renderMonth(){
     const isStart = rangeStart===ds;
     if(inSelRange) btn.classList.add('pl-map-mcal__day--selected');
     if(isStart) btn.style.outline='2px solid #e14425';
-    if(!has){ btn.classList.add('pl-map-mcal__day--muted'); btn.disabled=true; }
+    if(past){ btn.classList.add('pl-map-mcal__day--muted'); btn.disabled=true; }
     else if(!state.range && ds===state.selectedDate) btn.classList.add('pl-map-mcal__day--selected');
     else if(ds===state.todayISO && !inSelRange) btn.classList.add('pl-map-mcal__day--today');
-    if(has) btn.onclick=()=> handleMonthDayClick(ds);
+    if(!past) btn.onclick=()=> handleMonthDayClick(ds);
     grid.appendChild(btn);
   }
   const filled=offset+daysIn; for(let f=filled; f<42; f++){ const e=document.createElement('div'); grid.appendChild(e); }
-  // footer range clear
   const foot=document.createElement('div'); foot.style.cssText='display:flex;gap:8px;margin-top:10px';
   const btnClear=document.createElement('button'); btnClear.className='pl-btn pl-btn--secondary'; btnClear.style.flex='1'; btnClear.textContent='Сбросить';
-  btnClear.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
+  btnClear.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; state.timelineMode=null; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
   const btnToday=document.createElement('button'); btnToday.className='pl-btn'; btnToday.style.flex='1'; btnToday.textContent='Сегодня';
-  btnToday.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
+  btnToday.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; state.timelineMode=null; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
   foot.append(btnClear,btnToday);
   host.append(head,hint,grid,foot);
 }
 
 function handleMonthDayClick(ds){
   if(!rangeStart){
-    // first click: set start, wait for second
     rangeStart=ds;
     renderMonth();
     return;
   }
-  // second click: create range
   let start=rangeStart, end=ds;
   if(start>end) [start,end]=[end,start];
   if(start===end){
@@ -316,7 +324,7 @@ function handleMonthDayClick(ds){
     state.timelineMode=null;
   } else {
     state.range={start,end};
-    state.selectedDate=start; // for map single
+    state.selectedDate=start;
     state.timelineMode='range';
   }
   rangeStart=null;
@@ -326,16 +334,18 @@ function handleMonthDayClick(ds){
   refreshMapMarkers();
 }
 
-// Cards — venue, color, link to permlive
+// Cards
 function cardHTML(c, opts={}){
   const rank=opts.rank? `<div class="card-rank">${opts.rank}</div>`:'';
   const rating = c.cached_rating ? `<div class="card-rating-badge ${parseFloat(c.cached_rating)>=5?'featured':''}"><i class="fas fa-star"></i> ${c.display_rating||c.cached_rating}</div>` : '';
   const priceTag = c.price===0? 'бесплатно' : c.price? `${c.price}₽`: '';
   const tagName = c.tags?.[0]?.name||'';
   const venue = esc(c.place_name||c.place?.name||'');
+  const bg = c.bg_color || hashColor(c.slug||venue||String(c.id));
   const img = c.main_image? `<img class="card-img" src="${esc(c.main_image)}" alt="${esc(c.title)}" loading="lazy">` : `<div class="card-img-placeholder"></div>`;
-  const href = `https://permlive.ru/event/${esc(c.slug)}/`;
-  return `<a class="concert-card" href="${href}" target="_blank" rel="noopener" data-slug="${esc(c.slug)}" style="--card-bg-color:${esc(c.bg_color||'#f0f0f0')}">
+  const slug = c.slug || extractSlug(c.url||'');
+  const href = slug ? `https://permlive.ru/event/${esc(slug)}/` : '#';
+  return `<a class="concert-card" href="${href}" target="_blank" rel="noopener" data-slug="${esc(slug)}" style="--card-bg-color:${esc(bg)}">
     <div class="card-img-wrapper">${img}${rank}${rating}</div>
     <div class="card-info">
       <h3 class="card-title">${esc(c.title)}</h3>
@@ -346,10 +356,11 @@ function cardHTML(c, opts={}){
 }
 
 function renderSliders(){
-  const hasDateFilter = !!state.range || state.selectedDate!==state.todayISO || state.query.trim()!=='' || state.timelineMode;
+  const hasDateFilter = !!state.range || state.selectedDate!==state.todayISO || state.query.trim()!=='' ;
+  // timeline should be hidden unless timelineMode set
+  const showTimeline = !!state.timelineMode;
   // Date/Range slider
-  if(hasDateFilter){
-    // Determine list for date slider
+  if(hasDateFilter && !showTimeline){
     let list=[];
     let title='';
     let total=0;
@@ -369,31 +380,31 @@ function renderSliders(){
     els.sliderDate.style.display='';
     els.sliderTop10.style.display='none';
     els.sliderUpcoming.style.display='none';
-    $('#feed-sliders').style.display='';
     els.dateTitleText.textContent=title;
     renderSlider(els.sliderDate, els.dateRow, list, total, 'date', title);
-    // click title/badge -> timeline internal
     els.dateTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
     els.dateBadge.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
-  } else {
-    // No date filter: show top10 + upcoming
+    els.timelineWrap.style.display='none';
+  } else if(!hasDateFilter && !showTimeline){
+    // No date filter, no timeline: show top10 + upcoming
     els.sliderDate.style.display='none';
     els.sliderTop10.style.display='';
     els.sliderUpcoming.style.display='';
-    // Top-10
-    const sorted=[...state.concerts].filter(c=> c.date>=state.todayISO).sort((a,b)=> parseFloat(b.cached_rating)-parseFloat(a.cached_rating) || a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
-    const top10Total = sorted.length;
-    renderSlider(els.sliderTop10, els.top10Row, sorted, top10Total, 'top10', 'Топ-10');
+    els.timelineWrap.style.display='none';
+    const top10Total = state.top10Pool.length;
+    renderSlider(els.sliderTop10, els.top10Row, state.top10Pool, top10Total, 'top10', 'Топ-10');
     els.top10TitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('top10')};
     els.top10Badge.onclick=(e)=>{e.preventDefault(); openTimeline('top10')};
-    // Upcoming 3 days
-    const today=parseISO(state.todayISO);
-    const upcomingAll=state.concerts.filter(c=>{ const d=parseISO(c.date); return d>=today && d<= new Date(today.getFullYear(),today.getMonth(),today.getDate()+3); });
-    const upcomingTotal = upcomingAll.length;
-    const upcoming = upcomingAll.length? upcomingAll : sorted;
-    renderSlider(els.sliderUpcoming, els.upcomingRow, upcoming, upcomingTotal||sorted.length, 'upcoming', 'Ближайшие');
+    const upcomingTotal = state.upcomingPool.length;
+    renderSlider(els.sliderUpcoming, els.upcomingRow, state.upcomingPool, upcomingTotal, 'upcoming', 'Ближайшие');
     els.upcomingTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
     els.upcomingBadge.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
+  } else {
+    // timeline mode: hide all sliders
+    els.sliderDate.style.display='none';
+    els.sliderTop10.style.display='none';
+    els.sliderUpcoming.style.display='none';
+    els.timelineWrap.style.display='';
   }
 }
 
@@ -403,9 +414,12 @@ function renderSlider(slider, row, list, total, type, title){
   row.innerHTML = visible.map((c,i)=> cardHTML(c, type==='top10'?{rank:i+1}:{})).join('') || '<p style="padding:12px;color:#999">Нет событий</p>';
   const badge = slider.querySelector('.section-count-badge');
   if(badge){
-    if(hasMore){ badge.textContent=total; badge.style.display='inline-flex'; badge.onclick=(e)=>{e.preventDefault(); openTimeline(type)}; }
+    if(hasMore){ badge.textContent=total; badge.style.display='inline-flex'; }
     else badge.style.display='none';
   }
+  // remove old see-all
+  const oldSee = row.querySelector('.see-all-card');
+  if(oldSee) oldSee.remove();
   if(hasMore){
     const more=document.createElement('a');
     more.className='concert-card see-all-card';
@@ -423,25 +437,37 @@ function bindSliderArrows(slider){
   const left=slider.querySelector('.horizontal-slider-arrow.left');
   const right=slider.querySelector('.horizontal-slider-arrow.right');
   if(!row||!left||!right) return;
+  // avoid duplicate listeners
+  row.onscroll=null;
   function upd(){ left.classList.toggle('hidden', row.scrollLeft<=4); right.classList.toggle('hidden', row.scrollLeft+row.clientWidth >= row.scrollWidth-4); }
   row.addEventListener('scroll', upd); upd();
   left.onclick=()=> row.scrollBy({left:-260,behavior:'smooth'});
   right.onclick=()=> row.scrollBy({left:260,behavior:'smooth'});
 }
 
-// Timeline grouped by date — internal view
+// Timeline — only when timelineMode active
 function renderTimeline(){
   const list = state.filtered;
   els.timeline.innerHTML='';
   if(!list.length){
     els.timelineEmpty.classList.remove('hidden');
-    // hide timeline if we have slider with date empty? still show empty
     return;
   }
   els.timelineEmpty.classList.add('hidden');
   const groups={};
   list.forEach(c=>{ (groups[c.date]||(groups[c.date]=[])).push(c); });
   const dates=Object.keys(groups).sort();
+  // header with back
+  const header=document.createElement('div');
+  header.style.cssText='display:flex;align-items:center;gap:8px;margin:12px 0';
+  header.innerHTML=`<button id="timeline-back" class="pl-btn pl-btn--secondary" style="padding:6px 10px"><i class="fas fa-arrow-left"></i> Назад</button><span style="font-weight:700">${esc(getTimelineTitle())}</span>`;
+  els.timeline.appendChild(header);
+  $('#timeline-back').onclick=()=>{
+    state.timelineMode=null;
+    // if was date/range, keep range? but spec: clicking date again returns to main, so clear? keep date filter but hide timeline
+    // For top10/upcoming, clear timelineMode
+    applyFilter();
+  };
   dates.forEach(date=>{
     const d=parseISO(date);
     const dayEl=document.createElement('div'); dayEl.className='schedule-day';
@@ -451,15 +477,25 @@ function renderTimeline(){
     dayEl.appendChild(title);
     const events=document.createElement('div'); events.className='schedule-day-events';
     groups[date].forEach(c=>{
+      const slug=c.slug||extractSlug(c.url||'');
       const row=document.createElement('div'); row.className='schedule-event';
       row.innerHTML=`<span class="schedule-time">${esc(c.time||'')}</span>
-        <a class="schedule-title" href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fas fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
+        <a class="schedule-title" href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fas fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
         <span class="schedule-details">${esc(c.place_name||c.place?.name||'')} ${c.tags?.length? '› '+esc(c.tags[0].name):''} ${c.price===0?'› бесплатно': c.price? `› ${c.price}₽`:''}</span>`;
       events.appendChild(row);
     });
     dayEl.appendChild(events);
     els.timeline.appendChild(dayEl);
   });
+}
+
+function getTimelineTitle(){
+  if(state.timelineMode==='top10') return 'Топ-10';
+  if(state.timelineMode==='upcoming') return 'Ближайшие события';
+  if(state.timelineMode==='date') return fmtHeaderDate(parseISO(state.selectedDate));
+  if(state.timelineMode==='range') return `${fmtDateShort(state.range.start)} — ${fmtDateShort(state.range.end)}`;
+  if(state.timelineMode==='search') return `Поиск «${state.query}»`;
+  return '';
 }
 
 function applyFilter(){
@@ -469,46 +505,44 @@ function applyFilter(){
     list = state.concerts.filter(c=> (c.title+c.place_name+(c.tags?.map(t=>t.name).join(' ')||'')).toLowerCase().includes(q));
     state.timelineMode='search';
   } else if(state.timelineMode==='top10'){
-    list = [...state.concerts].filter(c=> c.date>=state.todayISO).sort((a,b)=> parseFloat(b.cached_rating)-parseFloat(a.cached_rating) || a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'')).slice(0,60);
+    list = [...state.top10Pool].slice(0,80);
   } else if(state.timelineMode==='upcoming'){
-    const today=parseISO(state.todayISO);
-    list = state.concerts.filter(c=>{ const d=parseISO(c.date); return d>=today && d<= new Date(today.getFullYear(),today.getMonth(),today.getDate()+14); });
-    if(!list.length) list = state.concerts.filter(c=> parseISO(c.date)>=today).slice(0,30);
-  } else if(state.timelineMode==='date' || state.range || state.selectedDate!==state.todayISO){
-    if(state.range) list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
-    else list = state.concerts.filter(c=> c.date===state.selectedDate);
-    state.timelineMode = state.range ? 'range' : 'date';
-  } else {
-    // default feed timeline: show selected date or today+next if empty -> but per new spec when no date filter we hide timeline? Keep showing today
+    list = [...state.upcomingPool].slice(0,80);
+  } else if(state.timelineMode==='date'){
     list = state.concerts.filter(c=> c.date===state.selectedDate);
-    if(!list.length) list = state.concerts.filter(c=> parseISO(c.date) >= parseISO(state.todayISO)).slice(0,20);
-    state.timelineMode=null;
+  } else if(state.timelineMode==='range'){
+    list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
+  } else if(state.range){
+    // date range selected but timeline not yet opened -> list for slider, timeline hidden
+    list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
+  } else if(state.selectedDate!==state.todayISO){
+    list = state.concerts.filter(c=> c.date===state.selectedDate);
+  } else {
+    // main feed
+    list = state.concerts.filter(c=> c.date===state.selectedDate);
   }
   state.filtered=list;
-  renderTimeline();
+  if(state.timelineMode){
+    renderTimeline();
+    els.timelineWrap.style.display='';
+  } else {
+    els.timelineWrap.style.display='none';
+    // render empty timeline for future open
+    renderTimeline();
+  }
   renderSliders();
-  // show/hide timeline wrapper depending on mode
-  // when top10/upcoming internal, timeline should be visible and sliders hidden except date? We keep sliders per renderSliders logic
-  els.timelineWrap.style.display = '';
 }
 
 function openTimeline(type){
   state.timelineMode = type;
-  // if date/range, keep range; if top10/upcoming, clear range but keep selectedDate as today for consistency
-  if(type==='top10' || type==='upcoming'){
-    // keep date filter cleared to show that timeline type
-    // but preserve range? clear it to show correct timeline
-    // don't clear selectedDate, just set mode
-  }
-  if(type==='date' && state.range) state.timelineMode='range';
   applyFilter();
-  // scroll to timeline
   els.timelineWrap.scrollIntoView({behavior:'smooth',block:'start'});
   history.pushState({timeline:type},'',`#timeline-${type}`);
 }
 
-// Sheet kept for map quick view but not for card click (cards now link)
+// Sheet
 function openSheet(c){
+  const slug=c.slug||extractSlug(c.url||'');
   els.sheetContent.innerHTML=`
     ${c.main_image? `<img class="sheet__img" src="${esc(c.main_image)}" alt="">`:''}
     <h3 class="sheet__title">${esc(c.title)}</h3>
@@ -517,7 +551,7 @@ function openSheet(c){
     <p class="sheet__desc">${esc(c.description||'Подробности на permlive.ru')}</p>
     <div style="display:flex;gap:8px;margin-top:6px;color:#a97c00;font-weight:600">${c.price===0? 'Вход свободный' : c.price? `от ${c.price}₽` : ''} ${c.is_paid? '· <span style="color:#e14425">★ Топ</span>':''}</div>
     <div class="sheet__actions">
-      <a class="pl-btn" href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener"><i class="fas fa-external-link"></i> Открыть на сайте</a>
+      <a class="pl-btn" href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener"><i class="fas fa-external-link"></i> Открыть на сайте</a>
       <button class="pl-btn pl-btn--secondary" id="sheet-map-btn"><i class="fas fa-map"></i> Показать на карте</button>
     </div>`;
   els.sheet.classList.add('sheet--open');
@@ -537,7 +571,6 @@ let leafletMap=null;
 
 function initMap(){
   if(yandexMap||leafletMap) return;
-  // try Yandex first
   if(window.ymaps3 && window.ymaps3.ready){
     initYandex();
   } else if(window.ymaps && window.ymaps.ready){
@@ -550,9 +583,8 @@ function initMap(){
 async function initYandex(){
   try{
     await ymaps3.ready;
-    const {YMap, YMapDefaultSchemeLayer, YMapDefaultFeaturesLayer, YMapMarker} = ymaps3;
-    // import controls if available
-    const center = [56.2502, 58.0105]; // [lng, lat] for v3
+    const {YMap, YMapDefaultSchemeLayer, YMapDefaultFeaturesLayer} = ymaps3;
+    const center = [56.2502, 58.0105];
     yandexMap = new YMap(els.mapEl, {location:{center, zoom:12}});
     yandexMap.addChild(new YMapDefaultSchemeLayer({})); 
     yandexMap.addChild(new YMapDefaultFeaturesLayer({}));
@@ -561,7 +593,7 @@ async function initYandex(){
       setView: (coords, zoom)=> yandexMap.setLocation({center:[coords[1],coords[0]], zoom:zoom||12}),
       invalidateSize: ()=>{}
     };
-    addYandexControls();
+    addCommonControls();
     refreshMapMarkers();
   }catch(e){
     console.warn('Yandex v3 failed, fallback Leaflet', e);
@@ -570,12 +602,11 @@ async function initYandex(){
 }
 
 function initYandex2(){
-  // fallback for v2
   try{
     ymaps.ready(()=>{
       yandexMap = new ymaps.Map(els.mapEl, {center:[58.0105,56.2502], zoom:12, controls:[]});
       state.map={ setCenter:(c,z)=> yandexMap.setCenter(c,z), setView:(c,z)=> yandexMap.setCenter(c,z), invalidateSize:()=> yandexMap.container.fitToViewport() };
-      addYandexControls();
+      addCommonControls();
       refreshMapMarkers();
     });
   }catch(e){ initLeaflet(); }
@@ -587,18 +618,9 @@ function initLeaflet(){
   leafletMap = L.map(els.mapEl,{zoomControl:false, attributionControl:false}).setView(center,12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OSM'}).addTo(leafletMap);
   state.map=leafletMap;
-  addLeafletControls(leafletMap);
+  addCommonControls();
+  try{ leafletMap.on('click',()=> { const dd=$('.map-dropdown'); if(dd) dd.classList.remove('map-dropdown--open'); }); }catch(e){}
   refreshMapMarkers();
-}
-
-function addYandexControls(){
-  // reuse same DOM controls as Leaflet
-  addCommonControls();
-}
-function addLeafletControls(map){
-  addCommonControls();
-  // leaflet close dropdown on map click
-  try{ map.on('click',()=> { const dd=$('.map-dropdown'); if(dd) dd.classList.remove('map-dropdown--open'); }); }catch(e){}
 }
 
 let controlsAdded=false;
@@ -624,10 +646,9 @@ function addCommonControls(){
 }
 
 function refreshMapMarkers(){
+  const isLeaflet = !!leafletMap;
   const isYandex = !!(yandexMap && window.ymaps3);
   const isYandex2 = !!(yandexMap && window.ymaps && ymaps.Map && yandexMap.geoObjects);
-  const isLeaflet = !!leafletMap;
-  // clear previous
   if(isLeaflet){
     state.mapMarkers.forEach(m=> leafletMap.removeLayer(m));
     state.mapMarkers=[];
@@ -661,12 +682,13 @@ function refreshMapMarkers(){
       el.innerHTML=`<span class="pl-map-pin__time">${esc(arr[0].time||'')}</span><span class="pl-map-pin__title">${esc(arr.length>1? arr[0].place_name+' +'+(arr.length-1) : arr[0].title.slice(0,18))}</span>`;
       const icon=L.divIcon({className:'', html: el, iconSize:[0,0], iconAnchor:[0,0]});
       const marker=L.marker([lat,lng],{icon}).addTo(leafletMap);
-      const popupContent = arr.map(c=> `<div style="margin:6px 0"><b>${esc(c.title)}</b><br><small>${esc(c.time||'')} · ${esc(c.place_name||'')} ${c.price===0?'· бесплатно': c.price? `· ${c.price}₽`:''}</small><br><a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" style="color:#e14425">Открыть →</a></div>`).join('<hr style="margin:6px 0;opacity:.2">');
+      const slug0=arr[0].slug||extractSlug(arr[0].url||'');
+      const popupContent = arr.map(c=>{ const s=c.slug||extractSlug(c.url||''); return `<div style="margin:6px 0"><b>${esc(c.title)}</b><br><small>${esc(c.time||'')} · ${esc(c.place_name||'')} ${c.price===0?'· бесплатно': c.price? `· ${c.price}₽`:''}</small><br><a href="https://permlive.ru/event/${esc(s)}/" target="_blank" style="color:#e14425">Открыть →</a></div>`}).join('<hr style="margin:6px 0;opacity:.2">');
       marker.bindPopup(`<div style="min-width:180px;max-width:260px"><b>${esc(arr[0].place_name||'')}</b>${arr[0].place?.address? `<br><small>${esc(arr[0].place.address)}</small>`:''}<hr style="opacity:.2">${popupContent}</div>`);
       state.mapMarkers.push(marker);
     } else if(isYandex2){
       const pm = new ymaps.Placemark([lat,lng], {
-        balloonContent: arr.map(c=> `<b>${esc(c.title)}</b> ${esc(c.time||'')} <a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank">Открыть</a>`).join('<br>')
+        balloonContent: arr.map(c=>{ const s=c.slug||extractSlug(c.url||''); return `<b>${esc(c.title)}</b> ${esc(c.time||'')} <a href="https://permlive.ru/event/${esc(s)}/" target="_blank">Открыть</a>`}).join('<br>')
       }, { preset: arr.some(a=>a.is_paid)? 'islands#redIcon':'islands#blueIcon'});
       yandexMap.geoObjects.add(pm);
       state.mapMarkers.push(pm);
@@ -691,8 +713,11 @@ async function loadMapForDate(iso){
   const j=await fetchJSON(`${API_BASE}/map/events/?date=${iso}`);
   if(j && Array.isArray(j.events)){
     const other=state.concerts.filter(c=>c.date!==iso);
-    const incoming=j.events.map(normalizeApiEvent);
-    state.concerts = [...other, ...incoming].sort((a,b)=> a.date.localeCompare(b.date));
+    const incoming=j.events.map(normalizeApiEvent).filter(c=>c.slug);
+    // dedup
+    const seen=new Set(state.concerts.map(c=>c.slug));
+    const add = incoming.filter(c=>!seen.has(c.slug));
+    state.concerts = [...state.concerts, ...add].sort((a,b)=> a.date.localeCompare(b.date));
     state.datesWithEvents.add(iso);
     applyFilter();
     refreshMapMarkers();
@@ -701,7 +726,6 @@ async function loadMapForDate(iso){
   }
 }
 
-// Tabs
 function switchTab(tab){
   state.tab=tab;
   els.tabBtns.forEach(b=>{ const active=b.dataset.tab===tab; b.classList.toggle('pl-tabbar__btn--active', active); b.setAttribute('aria-selected', String(active)); });
@@ -716,7 +740,6 @@ function switchTab(tab){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
-// Wire
 function wire(){
   els.tabBtns.forEach(b=> b.addEventListener('click',()=> switchTab(b.dataset.tab)));
   els.calOverlay.addEventListener('click', closeCalendar);
@@ -729,9 +752,7 @@ function wire(){
     else if(state.timelineMode==='search') state.timelineMode=null;
     applyFilter();
   });
-  // calendar strip open month modal on long press / double? Add button via map controls; for feed, click empty area opens month
   els.calendarInner.addEventListener('dblclick', openCalendar);
-  // swipe tabs
   let startX=0;
   document.addEventListener('touchstart', e=> startX=e.touches[0].clientX,{passive:true});
   document.addEventListener('touchend', e=>{
@@ -747,7 +768,6 @@ function wire(){
   });
 }
 
-// Boot
 (async function boot(){
   wire();
   renderCalendarStrip();
