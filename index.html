@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Живое! — афиша концертов Перми. Топ-10, ближайшие события, календарь и карта. VK Mini App.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Живое! — Афиша Перми — VK Mini App</title>
+
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+  <!-- VK Bridge -->
+  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
+
+  <!-- Leaflet for map (no API key needed, fallback to Yandex if available) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="pl-header">
+    <div class="pl-header__inner">
+      <a class="pl-logo" href="https://permlive.ru/" target="_blank" rel="noopener">
+        <span class="pl-logo__dot"></span>
+        <span class="pl-logo__text">Живое!</span>
+        <span class="pl-logo__sub">ПЕРМЬ</span>
+      </a>
+      <div class="pl-header__search" id="header-search">
+        <i class="fas fa-search"></i>
+        <input id="search-input" type="search" placeholder="Искать среди концертов" autocomplete="off">
+      </div>
+      <a class="pl-header__link" href="https://permlive.ru/map/" target="_blank" rel="noopener">permlive.ru</a>
+    </div>
+  </header>
+
+  <!-- Tab content -->
+  <main id="app">
+    <!-- FEED TAB -->
+    <section id="view-feed" class="view view--active">
+      <!-- Calendar as on map (horizontal + modal) -->
+      <div id="feed-calendar-wrap" class="feed-calendar-wrap">
+        <div id="feed-calendar" class="feed-calendar">
+          <button class="calendar-arrow left hidden" aria-label="Назад"><i class="fas fa-chevron-left"></i></button>
+          <div class="calendar-dates">
+            <div class="calendar-dates-inner" id="calendar-dates-inner"></div>
+          </div>
+          <button class="calendar-arrow right hidden" aria-label="Вперёд"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <!-- Month picker modal (like map calendar) -->
+        <button id="feed-date-btn" class="pl-map-date-btn" type="button" style="position:static; margin:10px auto 0; display:flex;">
+          <span class="pl-map-date-btn__text">Сегодня</span>
+          <svg class="pl-map-date-btn__chev" width="10" height="10" viewBox="0 0 448 512"><path d="M207.029 381.476L12.686 187.132c-9.373-9.373-9.373-24.569 0-33.941l22.667-22.667c9.357-9.357 24.522-9.357 33.901 0L224 284.505l154.745-154.021c9.379-9.379 24.546-9.379 33.901 0l22.667 22.667c9.373 9.373 9.373 24.569 0 33.941L240.971 381.476c-9.373 9.373-24.569 9.373-33.941 0z" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <!-- Feed Sliders -->
+      <div id="feed-sliders">
+
+        <!-- Top-10 -->
+        <div class="horizontal-slider top-10" id="slider-top10">
+          <h2 class="section-title"><i class="fas fa-star"></i> Топ-10 концертов</h2>
+          <div class="horizontal-slider-row" id="top10-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
+
+        <!-- Ближайшие -->
+        <div class="horizontal-slider upcoming" id="slider-upcoming">
+          <h2 class="section-title">
+            <span class="section-header-wrapper"><i class="fas fa-calendar"></i> Ближайшие события</span>
+            <a href="https://permlive.ru/timeline/upcoming/" target="_blank" class="section-count-badge" id="upcoming-badge" style="display:none"></a>
+          </h2>
+          <div class="horizontal-slider-row" id="upcoming-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
+
+        <!-- Интересуются -->
+        <div class="horizontal-slider" id="slider-popular" style="display:none">
+          <h2 class="section-title"><i class="fas fa-fire"></i> Интересуются прямо сейчас</h2>
+          <div class="horizontal-slider-row" id="popular-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
+
+      </div>
+
+      <!-- Timeline -->
+      <div id="timeline-wrap" class="timeline-wrap">
+        <div id="concert-container" class="cascade-element"></div>
+        <div id="timeline-empty" class="timeline-empty hidden">
+          <p><i class="fas fa-calendar-xmark"></i> На эту дату концертов нет</p>
+          <button id="btn-show-all" class="pl-btn">Показать все ближайшие</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAP TAB -->
+    <section id="view-map" class="view">
+      <div id="map" class="map"></div>
+      <!-- Controls injected by JS -->
+    </section>
+  </main>
+
+  <!-- Calendar modal (shared) -->
+  <div id="cal-overlay" class="pl-map-calendar-overlay"></div>
+  <div id="cal-modal" class="pl-map-calendar-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="pl-map-calendar-modal__cal"></div>
+  </div>
+
+  <!-- Event sheet (mobile bottom sheet / desktop card) -->
+  <div id="event-sheet-overlay" class="sheet-overlay"></div>
+  <div id="event-sheet" class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet__handle"></div>
+    <button class="sheet__close" aria-label="Закрыть">&times;</button>
+    <div id="sheet-content"></div>
+  </div>
+
+  <!-- VK Tabbar -->
+  <nav class="pl-tabbar" role="tablist" aria-label="Навигация">
+    <button class="pl-tabbar__btn pl-tabbar__btn--active" data-tab="feed" role="tab" aria-selected="true">
+      <i class="fas fa-house"></i><span>Афиша</span>
+    </button>
+    <button class="pl-tabbar__btn" data-tab="map" role="tab" aria-selected="false">
+      <i class="fas fa-map-location-dot"></i><span>Карта</span>
+    </button>
+  </nav>
+
+  <!-- Toast -->
+  <div id="toast" class="pl-toast"></div>
+
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+</html>
