@@ -84,12 +84,12 @@ function extractSlug(urlOrSlug){
 
 const state = {
   tab: 'feed',
-  selectedDate: ekbTodayISO(),
+  selectedDate: null, // no day selected by default (per request)
   range: null,
   datesWithEvents: new Set(),
   concerts: [],
-  upcomingPool: [], // for upcoming slider
-  top10Pool: [], // sorted top10
+  upcomingPool: [],
+  top10Pool: [],
   filtered: [],
   query: '',
   map: null,
@@ -108,14 +108,12 @@ async function fetchJSON(url){
 }
 
 async function loadData(){
-  // calendar dates from open API
   const cal = await fetchJSON(`${API_BASE}/api/calendar-dates/`);
   if(cal && Array.isArray(cal.dates)){
     state.datesWithEvents=new Set(cal.dates);
     if(cal.today) state.todayISO=cal.today;
-    state.selectedDate=cal.today||state.todayISO;
+    // keep no selection by default per request (don't set selectedDate to today)
   } else {
-    // will fill after concerts load
   }
   // fetch concerts pool — use open api /api/concerts/?limit=500
   let pool = [];
@@ -167,18 +165,34 @@ function normalizeApiEvent(e){
   };
 }
 
-// Calendar strip — 60 days (2 months) from today, inactive if no concerts
+// Calendar strip — 60 days (2 months) from today, inactive if no concerts, month label
+function updateMonthLabel(){
+  const lbl=document.getElementById('calendar-month-label');
+  if(!lbl) return;
+  const today=parseISO(state.todayISO);
+  const monthsNom=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  // show month of today + next if spans two months
+  const end=new Date(today); end.setDate(end.getDate()+59);
+  const m1=monthsNom[today.getMonth()], m2=monthsNom[end.getMonth()];
+  const y1=today.getFullYear(), y2=end.getFullYear();
+  let txt=m1.charAt(0).toUpperCase()+m1.slice(1);
+  if(m1!==m2) txt+=` — ${m2.charAt(0).toUpperCase()+m2.slice(1)}`;
+  if(y1!==y2) txt+=` ${y1} — ${y2}`;
+  else txt+=` ${y1}`;
+  lbl.textContent=txt;
+}
 function renderCalendarStrip(){
   const inner=els.calendarInner;
   inner.innerHTML='';
+  updateMonthLabel();
   const today=parseISO(state.todayISO);
   const totalDays = 60;
   for(let i=0;i<totalDays;i++){
     const d=new Date(today); d.setDate(today.getDate()+i);
     const iso=toISO(d);
-    const has = state.datesWithEvents.has(iso);
+    const has = state.datesWithEvents.has(iso) || state.datesWithEvents.size===0;
     const inRange = isInRange(iso);
-    const sel = state.range ? inRange : iso===state.selectedDate;
+    const sel = state.selectedDate ? (state.range ? inRange : iso===state.selectedDate) : false;
     const isWeekend=d.getDay()===0||d.getDay()===6;
     const el=document.createElement('button');
     el.className='calendar-date'+(sel?' selected':'')+(isWeekend?' calendar-date--weekend':'');
@@ -200,19 +214,16 @@ function isInRange(iso){
 }
 
 function handleCalendarClick(iso){
-  // clicking same selected single date -> cancel to main
-  if(!state.range && iso===state.selectedDate && state.todayISO!==iso){
+  // clicking same selected single date -> cancel to main (per request)
+  if(!state.range && iso===state.selectedDate){
     clearDateFilter();
     return;
   }
-  // clicking inside range -> maybe cancel? For simplicity, single click replaces
   if(state.range && iso>=state.range.start && iso<=state.range.end && state.range.start!==state.range.end){
-    // clicking inside range selects that single date
     state.range=null;
     state.selectedDate=iso;
     state.timelineMode=null;
   } else {
-    // single date selection
     state.range=null;
     state.selectedDate=iso;
     state.timelineMode=null;
@@ -226,7 +237,7 @@ function handleCalendarClick(iso){
 
 function clearDateFilter(){
   state.range=null;
-  state.selectedDate=state.todayISO;
+  state.selectedDate=null;
   state.timelineMode=null;
   renderCalendarStrip();
   applyFilter();
@@ -265,7 +276,6 @@ function renderMonth(){
   const host=els.calModal.querySelector('.pl-map-calendar-modal__cal');
   const y=calView.y, m=calView.m;
   const today=parseISO(state.todayISO);
-  // max = today + 90 days (from API) or today+60
   const maxDate = parseISO(state.todayISO); maxDate.setDate(maxDate.getDate()+90);
   const monthsNom=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   const atStart = y < today.getFullYear() || (y===today.getFullYear() && m<=today.getMonth());
@@ -281,15 +291,16 @@ function renderMonth(){
   next.onclick=()=>{ if(atEnd) return; calView={y: m===11?y+1:y, m: m===11?0:m+1}; renderMonth(); };
   close.onclick=closeCalendar;
   head.append(prev,label,next,close);
+  const isMap = state.tab==='map';
   const hint=document.createElement('div'); hint.style.cssText='font-size:11px;color:#999;text-align:center;margin:6px 0';
-  hint.textContent= rangeStart ? 'Выберите конец диапазона' : 'Клик — дата, второй клик — диапазон';
+  hint.textContent= isMap ? 'Выберите дату' : (rangeStart ? 'Выберите конец диапазона' : 'Клик — дата, второй клик — диапазон');
   const grid=document.createElement('div'); grid.className='pl-map-mcal__grid';
   ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach((n,i)=>{ const w=document.createElement('div'); w.className='pl-map-mcal__wd'+(i>=5?' pl-map-mcal__wd--weekend':''); w.textContent=n; grid.appendChild(w); });
   const first=new Date(y,m,1); const offset=(first.getDay()+6)%7; const daysIn=new Date(y,m+1,0).getDate();
   for(let i=0;i<offset;i++){ const e=document.createElement('div'); e.style.aspectRatio='1'; grid.appendChild(e); }
   for(let d=1;d<=daysIn;d++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const has = true; // allow any date within 2 months, even if no events yet, but disable past
+    const has = state.datesWithEvents.has(ds);
     const past = ds < state.todayISO;
     const wd=new Date(y,m,d).getDay();
     const btn=document.createElement('button'); btn.className='pl-map-mcal__day'; if(wd===0||wd===6) btn.classList.add('pl-map-mcal__day--weekend');
@@ -298,16 +309,17 @@ function renderMonth(){
     const isStart = rangeStart===ds;
     if(inSelRange) btn.classList.add('pl-map-mcal__day--selected');
     if(isStart) btn.style.outline='2px solid #e14425';
-    if(past){ btn.classList.add('pl-map-mcal__day--muted'); btn.disabled=true; }
+    const isEmpty = !has && !past;
+    if(past || isEmpty){ btn.classList.add('pl-map-mcal__day--muted'); btn.disabled=true; }
     else if(!state.range && ds===state.selectedDate) btn.classList.add('pl-map-mcal__day--selected');
     else if(ds===state.todayISO && !inSelRange) btn.classList.add('pl-map-mcal__day--today');
-    if(!past) btn.onclick=()=> handleMonthDayClick(ds);
+    if(!past && has) btn.onclick=()=> handleMonthDayClick(ds);
     grid.appendChild(btn);
   }
   const filled=offset+daysIn; for(let f=filled; f<42; f++){ const e=document.createElement('div'); grid.appendChild(e); }
   const foot=document.createElement('div'); foot.style.cssText='display:flex;gap:8px;margin-top:10px';
   const btnClear=document.createElement('button'); btnClear.className='pl-btn pl-btn--secondary'; btnClear.style.flex='1'; btnClear.textContent='Сбросить';
-  btnClear.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; state.timelineMode=null; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
+  btnClear.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=null; state.timelineMode=null; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
   const btnToday=document.createElement('button'); btnToday.className='pl-btn'; btnToday.style.flex='1'; btnToday.textContent='Сегодня';
   btnToday.onclick=()=>{ state.range=null; rangeStart=null; state.selectedDate=state.todayISO; state.timelineMode=null; renderCalendarStrip(); applyFilter(); closeCalendar(); refreshMapMarkers(); };
   foot.append(btnClear,btnToday);
@@ -315,6 +327,18 @@ function renderMonth(){
 }
 
 function handleMonthDayClick(ds){
+  // map: only single date, no range
+  if(state.tab==='map'){
+    state.range=null;
+    rangeStart=null;
+    state.selectedDate=ds;
+    state.timelineMode=null;
+    closeCalendar();
+    renderCalendarStrip();
+    applyFilter();
+    loadMapForDate(ds);
+    return;
+  }
   if(!rangeStart){
     rangeStart=ds;
     renderMonth();
@@ -405,10 +429,8 @@ function cardHTML(c, opts={}){
 }
 
 function renderSliders(){
-  const hasDateFilter = !!state.range || state.selectedDate!==state.todayISO || state.query.trim()!=='' ;
-  // timeline should be hidden unless timelineMode set
+  const hasDateFilter = !!state.range || (state.selectedDate && state.selectedDate!==state.todayISO) || state.query.trim()!=='' ;
   const showTimeline = !!state.timelineMode;
-  // Date/Range slider
   if(hasDateFilter && !showTimeline){
     let list=[];
     let title='';
@@ -421,10 +443,14 @@ function renderSliders(){
       list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
       title=`${fmtDateShort(state.range.start)} — ${fmtDateShort(state.range.end)}`;
       total=list.length;
-    } else {
+    } else if(state.selectedDate){
       list = state.concerts.filter(c=> c.date===state.selectedDate);
       title=fmtHeaderDate(parseISO(state.selectedDate));
       total=list.length;
+    } else {
+      list=[];
+      title='';
+      total=0;
     }
     els.sliderDate.style.display='';
     els.sliderTop10.style.display='none';
@@ -567,22 +593,22 @@ function applyFilter(){
     list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
   } else if(state.range){
     list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
-  } else if(state.selectedDate!==state.todayISO){
+  } else if(state.selectedDate){
     list = state.concerts.filter(c=> c.date===state.selectedDate);
   } else {
-    list = state.concerts.filter(c=> c.date===state.selectedDate);
+    list = [];
   }
   state.filtered=list;
-  // hide calendar in timeline per request
   const calWrap = document.getElementById('feed-calendar-wrap');
   if(state.timelineMode){
     renderTimeline();
     els.timelineWrap.style.display='';
     if(calWrap) calWrap.style.display='none';
   } else {
+    // no timeline: hide timeline, show calendar
     els.timelineWrap.style.display='none';
     if(calWrap) calWrap.style.display='';
-    renderTimeline();
+    // don't render timeline when hidden to avoid empty group logic
   }
   renderSliders();
 }
@@ -667,7 +693,8 @@ function initLeaflet(){
 let controlsAdded=false;
 function addCommonControls(){
   if(controlsAdded) return; controlsAdded=true;
-  const dateBtn=document.createElement('button'); dateBtn.className='pl-map-date-btn map-date-btn'; dateBtn.innerHTML='<span class="pl-map-date-btn__text">Карта</span> <i class="fas fa-calendar" style="font-size:11px"></i>';
+  const dateText = state.selectedDate ? fmtHeaderDate(parseISO(state.selectedDate)) : 'Сегодня';
+  const dateBtn=document.createElement('button'); dateBtn.className='pl-map-date-btn map-date-btn'; dateBtn.innerHTML=`<span class="pl-map-date-btn__text">${esc(dateText)}</span> <i class="fa-solid fa-calendar" style="font-size:11px"></i>`;
   dateBtn.onclick=openCalendar;
   els.mapEl.appendChild(dateBtn);
   const modeBtn=document.createElement('button'); modeBtn.className='pl-map-date-btn map-mode-btn'; modeBtn.style.top='56px'; modeBtn.innerHTML='<span>Все концерты</span> <i class="fas fa-chevron-down" style="font-size:10px"></i>';
@@ -687,6 +714,43 @@ function addCommonControls(){
 }
 
 function refreshMapMarkers(){
+  // Prefer site's Yandex clusterer via PermLiveMaps if available
+  let listY=[];
+  if(state.range) listY=state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
+  else if(state.selectedDate) listY=state.concerts.filter(c=> c.date===state.selectedDate);
+  else listY=state.concerts.filter(c=> c.date===state.todayISO);
+  if(state.mapMode==='free') listY=listY.filter(c=> c.price===0);
+  if(state.mapMode==='paid') listY=listY.filter(c=> c.is_paid);
+  if(window.PermLiveMaps && typeof window.PermLiveMaps.setEvents==='function' && yandexReady){
+    try{
+      const evts=listY.map(c=>{
+        const coords=c.place?.coordinates||'';
+        const [latStr,lngStr]=coords.split(','); const lat=parseFloat(latStr), lng=parseFloat(lngStr);
+        return {
+          id:c.id, title:c.title, url:'https://permlive.ru/event/'+(c.slug||'')+'/',
+          date:c.date, time:c.time||'', price:c.price||0, paid:!!c.is_paid, rating:parseFloat(c.cached_rating||3),
+          place:c.place_name||c.place?.name||'', address:c.place?.address||'',
+          coordinates:[isFinite(lng)?lng:56.25, isFinite(lat)?lat:58.01],
+          image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false
+        };
+      }).filter(e=>e.coordinates[0] && e.coordinates[1]);
+      // keep PermLiveMapData in sync for map logic (emotions etc)
+      window.PermLiveMapData = window.PermLiveMapData||{};
+      window.PermLiveMapData.events=evts;
+      window.PermLiveMapData.today=state.todayISO;
+      window.PermLiveMapData.defaultDate=state.selectedDate||state.todayISO;
+      window.PermLiveMapData.emotionDate=state.todayISO;
+      window.__PermLiveMapCurrentDate = state.selectedDate||state.todayISO;
+      window.PermLiveMaps.setEvents(evts, {recenter:true});
+      // update map date button text
+      const mapDateBtn=document.querySelector('.map-date-btn .pl-map-date-btn__text');
+      if(mapDateBtn){
+        const txt = state.selectedDate ? fmtHeaderDate(parseISO(state.selectedDate)) : 'Сегодня';
+        mapDateBtn.textContent=txt;
+      }
+      return;
+    }catch(e){ console.warn('PermLiveMaps setEvents failed', e); }
+  }
   const isLeaflet = !!leafletMap;
   const isYandex = !!(yandexMap && window.ymaps3);
   const isYandex2 = !!(yandexMap && window.ymaps && ymaps.Map && yandexMap.geoObjects);
@@ -769,6 +833,13 @@ async function loadMapForDate(iso){
 
 function switchTab(tab){
   state.tab=tab;
+  // prevent site's events-map.js fullscreen lock
+  document.body.classList.remove('map-fullscreen','pl-map-fs');
+  document.documentElement.style.removeProperty('height');
+  document.body.style.removeProperty('overflow');
+  document.body.style.removeProperty('height');
+  const calWrap=document.getElementById('feed-calendar-wrap');
+  if(calWrap) calWrap.style.removeProperty('display');
   els.tabBtns.forEach(b=>{ const active=b.dataset.tab===tab; b.classList.toggle('pl-tabbar__btn--active', active); b.setAttribute('aria-selected', String(active)); });
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');

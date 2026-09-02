@@ -15,6 +15,12 @@
 html,body{margin:0;padding:0;background:var(--bg);color:var(--dark);font-family:'Jost',Arial,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 a:hover{color:var(--red)}
+.concert-card:hover{color:inherit !important}
+.concert-card:hover .card-title{color:inherit !important}
+#view-feed a:hover{color:inherit}
+#view-feed .schedule-title:hover{color:var(--red) !important}
+html{overflow-y:auto}
+body{overflow:visible !important}
 .hidden{display:none !important}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
@@ -29,13 +35,16 @@ a:hover{color:var(--red)}
 .pl-header__search input{flex:1;border:0;background:transparent;outline:0;font-size:14px}
 
 /* Main layout */
-#app{padding-top:var(--header-h);padding-bottom:var(--tabbar-h);max-width:1120px;margin:0 auto;min-height:100vh}
+#app{padding-top:var(--header-h);padding-bottom:var(--tabbar-h);max-width:1120px;margin:0 auto;min-height:100vh;overflow:visible}
 .view{display:none;padding:0 12px}
-.view--active{display:block}
+.view--active{display:block;overflow:visible}
+body.map-fullscreen,body.pl-map-fs{overflow:visible !important;height:auto !important}
+body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 @media(min-width:768px){.view{padding:0 16px}}
 
-/* Calendar strip (feed) */
+/* Calendar strip (feed) — month label like site */
 .feed-calendar-wrap{padding:12px 0 4px}
+.calendar-month-label{font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;font-weight:500}
 .feed-calendar{position:relative;display:flex;align-items:center;gap:8px}
 .calendar-dates{flex:1;overflow:hidden;position:relative}
 .calendar-dates-inner{display:flex;gap:6px;padding:6px 2px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none}
@@ -94,10 +103,11 @@ a:hover{color:var(--red)}
 .horizontal-slider-arrow.hidden{opacity:0;pointer-events:none}
 @media(max-width:768px){.horizontal-slider-arrow{display:none}}
 
-/* Card */
-.concert-card{flex:0 0 170px;width:170px;border-radius:var(--card-radius);overflow:hidden;background:var(--card-bg-color,#f0f0f0);display:flex;flex-direction:column;text-decoration:none;color:var(--dark)}
-@media(min-width:768px){.concert-card{flex:0 0 190px;width:190px}}
-.card-img-wrapper{position:relative;width:100%;height:170px;overflow:hidden;background:linear-gradient(135deg,#e8e8e8,#f5f5f5)}
+/* Card — info slightly smaller than image like site: image 180, info 110, card 290 */
+.concert-card{flex:0 0 170px;width:170px;height:290px;border-radius:var(--card-radius);overflow:hidden;background:var(--card-bg-color,#f0f0f0);display:flex;flex-direction:column;text-decoration:none;color:var(--dark)}
+@media(min-width:768px){.concert-card{flex:0 0 190px;width:190px;height:300px}}
+.card-img-wrapper{position:relative;width:100%;height:180px;flex:0 0 180px;overflow:hidden;background:linear-gradient(135deg,#e8e8e8,#f5f5f5)}
+@media(min-width:768px){.card-img-wrapper{height:190px;flex:0 0 190px}}
 .card-img{width:100%;height:100%;object-fit:cover;display:block}
 .card-img-placeholder{width:100%;height:100%;background:linear-gradient(135deg,#e8e8e8,#f5f5f5)}
 .card-like{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -111,7 +121,8 @@ a:hover{color:var(--red)}
 .card-rating-badge.featured i{color:#222}
 .card-rank{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.8);color:#fff;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 .top-10 .card-rank{display:flex}
-.card-info{padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px;flex:1;background:var(--card-bg-color,#f0f0f0)}
+.card-info{padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px;height:110px;flex:0 0 110px;background:var(--card-bg-color,#f0f0f0)}
+@media(min-width:768px){.card-info{height:110px;flex:0 0 110px}}
 .card-title{font-weight:600;font-size:13px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
 .card-meta{font-size:11px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-rating{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;background:rgba(255,255,255,.75);padding:4px 8px;border-radius:999px;align-self:flex-start;margin-top:4px}
