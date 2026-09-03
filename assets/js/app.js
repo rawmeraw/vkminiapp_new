@@ -1345,15 +1345,33 @@ function wire(){
   els.calOverlay.addEventListener('click', closeCalendar);
   els.sheetOverlay.addEventListener('click', closeSheet);
   $('.sheet__close')?.addEventListener('click', closeSheet);
-  $('#btn-show-all').addEventListener('click',()=>openTimeline('upcoming'));
+  // «Показать все ближайшие» из пустого поиска: сначала сбросить запрос,
+  // иначе applyFilter снова уведёт в timelineMode='search' с тем же пустым результатом
+  $('#btn-show-all').addEventListener('click',()=>{
+    state.query='';
+    if(els.searchInput){ els.searchInput.value=''; const sc=$('#search-clear'); if(sc) sc.style.display='none'; }
+    openTimeline('upcoming');
+  });
   const btnPropose=document.getElementById('btn-propose');
   if(btnPropose) btnPropose.addEventListener('click',()=>switchTab('add'));
+  const searchClear=$('#search-clear');
+  const updateSearchClear=()=>{ if(searchClear) searchClear.style.display = els.searchInput.value ? '' : 'none'; };
   els.searchInput.addEventListener('input', e=>{
     state.query=e.target.value;
     if(state.query.trim()) state.timelineMode='search';
     else if(state.timelineMode==='search') state.timelineMode=null;
+    updateSearchClear();
     applyFilter();
   });
+  if(searchClear) searchClear.addEventListener('click', ()=>{
+    els.searchInput.value='';
+    state.query='';
+    if(state.timelineMode==='search') state.timelineMode=null;
+    updateSearchClear();
+    applyFilter();
+    try{ els.searchInput.focus({preventScroll:true}); }catch(e){ els.searchInput.focus(); }
+  });
+  updateSearchClear();
   els.calendarInner.addEventListener('dblclick', openCalendar);
   // лайки: делегированный клик по сердечкам (карточки — ссылки, переход отменяем)
   document.addEventListener('click', function(e){
