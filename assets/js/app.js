@@ -129,6 +129,7 @@ const state = {
   top10Pool: [],
   forYouPool: [],
   vkUserId: null,
+  vkName: '',
   hasForYou: false,
   filtered: [],
   query: '',
@@ -212,29 +213,34 @@ async function loadData(){
   }catch(e){}
   // VK рекомендации — если пользователь привязан через allauth
   try{
-    let vkId=null;
+    let vkId=null, vkName='';
     const urlParams=new URLSearchParams(window.location.search);
     vkId=urlParams.get('vk_user_id') || urlParams.get('vk_user-id') || urlParams.get('uid');
+    vkName=urlParams.get('vk_name')||'';
     if(!vkId && window.vkBridge){
       try{
         const u=await bridge.send('VKWebAppGetUserInfo');
-        if(u && u.id) vkId=String(u.id);
+        if(u && u.id){ vkId=String(u.id); vkName=[u.first_name, u.last_name].filter(Boolean).join(' '); }
       }catch(err){}
     }
     if(!vkId){
       try{
         const lp=await bridge.send('VKWebAppGetLaunchParams');
         if(lp && lp.vk_user_id) vkId=String(lp.vk_user_id);
+        if(lp && !vkName && lp.vk_viewer_first_name) vkName=[lp.vk_viewer_first_name, lp.vk_viewer_last_name].filter(Boolean).join(' ');
       }catch(err){}
     }
     if(vkId){
       state.vkUserId=vkId;
+      state.vkName=vkName||'';
       const rec=await cachedFetch('vk_rec_'+vkId, `${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`, 5*60*1000);
       if(rec && rec.has_user && rec.has_recommendations && Array.isArray(rec.results) && rec.results.length){
         const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
         state.foryouPool=list;
         state.hasForYou=true;
       }
+    } else if(vkName){
+      state.vkName=vkName;
     }
   }catch(e){ console.warn('vk rec failed',e); }
 }
@@ -1147,7 +1153,7 @@ function wire(){
         const r=await fetch(API_BASE+'/api/vk/propose/', {
           method:'POST',
           headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
-          body: JSON.stringify({link: link, vk_user_id: state.vkUserId||''})
+          body: JSON.stringify({link: link, vk_user_id: state.vkUserId||'', vk_name: state.vkName||''})
         });
         // если старый прод без нового API — 404, пробуем /add/
         if(r.status===404){
