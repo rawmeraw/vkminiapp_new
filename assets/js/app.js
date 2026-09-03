@@ -251,6 +251,8 @@ async function loadData(){
               Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
             }
             window.PermLiveMapVk={vk_user_id: String(u.id), vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||'', vk_avatar: state.vkAvatar||''};
+            // эмоции могли загрузиться раньше без vk_user_id (is_mine=false) — перечитать
+            try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err){}
           }
         }catch(err){}
       }

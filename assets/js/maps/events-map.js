@@ -937,6 +937,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         if (em.is_mine) {
             markerEl.classList.add('pl-map-emotion--mine');
             markerEl.appendChild(el('span', 'pl-map-emotion__mine-badge', 'Вы'));
+        } else if (em.user) {
+            markerEl.appendChild(el('span', 'pl-map-emotion__user-label', escapeHtml(em.user)));
         }
         markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
         return markerEl;
@@ -2519,6 +2521,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         });
     }
 
+    /* VKMINI: миник перечитывает эмоции после резолва пользователя (is_mine) */
+    window.PermLiveMaps.refreshEmotions = fetchEmotions;
     window.PermLiveMaps.setEvents = function (events, opts) {
         state.events = Array.isArray(events) ? events : [];
         renderEvents(!opts || opts.recenter !== false);

@@ -1214,6 +1214,30 @@ body.pl-map-fs #map {
     pointer-events: none;
 }
 
+.pl-map-emotion__user-label {
+    position: absolute;
+    top: -4px;
+    right: -8px;
+    max-width: 110px;
+    height: 15px;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    color: #333;
+    font-family: 'Jost', Arial, sans-serif;
+    font-size: 0.6rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+}
+
 @keyframes pl-emotion-glow {
     0%, 100% {
         filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.55))
