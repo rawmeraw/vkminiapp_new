@@ -908,13 +908,15 @@ async function loadMapForDate(iso){
 
 function switchTab(tab){
   state.tab=tab;
-  // prevent site's events-map.js fullscreen lock
   document.body.classList.remove('map-fullscreen','pl-map-fs');
   document.documentElement.style.removeProperty('height');
   document.body.style.removeProperty('overflow');
   document.body.style.removeProperty('height');
   const calWrap=document.getElementById('feed-calendar-wrap');
   if(calWrap) calWrap.style.removeProperty('display');
+  // поиск только на главной
+  const hdrSearch=document.querySelector('.pl-header__search');
+  if(hdrSearch) hdrSearch.style.display = tab==='feed' ? 'flex' : 'none';
   els.tabBtns.forEach(b=>{ const active=b.dataset.tab===tab; b.classList.toggle('pl-tabbar__btn--active', active); b.setAttribute('aria-selected', String(active)); });
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
@@ -940,15 +942,7 @@ function wire(){
     applyFilter();
   });
   els.calendarInner.addEventListener('dblclick', openCalendar);
-  let startX=0;
-  document.addEventListener('touchstart', e=> startX=e.touches[0].clientX,{passive:true});
-  document.addEventListener('touchend', e=>{
-    const dx=e.changedTouches[0].clientX - startX;
-    if(Math.abs(dx)>80){
-      if(dx<0 && state.tab==='feed') switchTab('map');
-      else if(dx>0 && state.tab==='map') switchTab('feed');
-    }
-  },{passive:true});
+  // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
   document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); }});
   window.addEventListener('popstate', e=>{
     if(e.state && e.state.timeline) openTimeline(e.state.timeline);
