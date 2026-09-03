@@ -156,7 +156,18 @@
     <div id="sheet-content"></div>
   </div>
 
-
+  <!-- Mobile footer — показывается только на смартфонах, с подписями -->
+  <nav class="pl-tabbar" role="tablist" aria-label="Навигация">
+    <button class="pl-tabbar__btn pl-tabbar__btn--active" data-tab="feed" role="tab" aria-selected="true">
+      <i class="fa-solid fa-calendar"></i><span>Календарь</span>
+    </button>
+    <button class="pl-tabbar__btn" data-tab="map" role="tab" aria-selected="false">
+      <i class="fa-solid fa-map-location-dot"></i><span>Карта</span>
+    </button>
+    <button class="pl-tabbar__btn" data-tab="add" role="tab" aria-selected="false">
+      <i class="fa-solid fa-plus"></i><span>Предложить</span>
+    </button>
+  </nav>
 
   <!-- Toast -->
   <div id="toast" class="pl-toast"></div>
