@@ -770,7 +770,9 @@ function ensureMapButtons(){
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
+    // убрать все старые fullscreen (включая нерабочий второй)
     document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b){ b.remove(); });
+    Array.from(controls.querySelectorAll('button')).filter(function(b){return b.innerHTML.includes('fa-expand')||b.innerHTML.includes('fa-compress')}).forEach(function(b){ if(!b.classList.contains('pl-map-fullscreen-btn')) b.remove(); });
     const fsBtn=document.createElement('button');
     fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
     fsBtn.title='На весь экран';
@@ -783,13 +785,22 @@ function ensureMapButtons(){
       setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
     };
     controls.prepend(fsBtn);
+    controls.style.width='56px';
+    controls.style.padding='6px';
+    controls.style.gap='10px';
   }, 300);
-  // повтор через 1с на случай позднего создания events-map контролов + убрать лишний fullscreen
+  // повтор через 1с — левые кнопки и лишний fullscreen (любой с expand)
   setTimeout(function(){
     const d=document.querySelector('.pl-map-date-btn');
     const m=document.querySelector('.pl-map-mode-btn');
-    if(d) d.style.display='inline-flex';
-    if(m) m.style.display='inline-flex';
+    if(d){ d.style.display='inline-flex'; d.style.visibility='visible'; d.style.opacity='1'; }
+    if(m){ m.style.display='inline-flex'; m.style.visibility='visible'; m.style.opacity='1'; }
+    const ctr=document.querySelector('.pl-map-controls');
+    if(ctr){
+      ctr.style.width='56px'; ctr.style.padding='6px'; ctr.style.gap='10px';
+      const expands=Array.from(ctr.querySelectorAll('button')).filter(function(b){return b.innerHTML.includes('fa-expand')||b.innerHTML.includes('fa-compress')});
+      expands.forEach(function(b,i){ if(i>0) b.remove(); });
+    }
     document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b,i){ if(i>0) b.remove(); });
   }, 1200);
 }
