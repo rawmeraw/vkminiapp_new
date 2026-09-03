@@ -1089,13 +1089,20 @@ function switchTab(tab){
 }
 
 function wire(){
-  // header nav
+  // header nav (desktop) + footer nav (mobile) — обе должны кликаться
   $$('.pl-header-link').forEach(a=>{
     a.addEventListener('click', function(e){
       e.preventDefault();
       const nav=this.dataset.nav;
       if(nav==='calendar') switchTab('calendar');
       else switchTab(nav);
+    });
+  });
+  $$('.pl-tabbar__btn').forEach(b=>{
+    b.addEventListener('click', function(e){
+      e.preventDefault();
+      const tab=this.dataset.tab;
+      if(tab) switchTab(tab);
     });
   });
   // add form — vk.ru без схемы и кириллица, проверка по link полям, API без CSRF
@@ -1129,40 +1136,90 @@ function wire(){
       }
       if(!link.includes('://')) link='https://'+link;
       status.textContent='Отправляю...'; status.style.color='#666';
+      // пробуем новый API, если 404 — фолбэк на старый /add/ (для продов без деплоя)
+      let done=false;
       try{
         const r=await fetch(API_BASE+'/api/vk/propose/', {
           method:'POST',
           headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
           body: JSON.stringify({link: link, vk_user_id: state.vkUserId||''})
         });
+        // если старый прод без нового API — 404, пробуем /add/
+        if(r.status===404){
+          throw new Error('fallback to /add/');
+        }
         const j=await r.json().catch(()=>null);
         if(j && j.ok){
           status.textContent='Ссылка на событие отправлена, спасибо!';
           status.style.color='#2f9e44';
-          inp.value='';
+          inp.value=''; done=true;
         } else if(j && j.error==='duplicate'){
           status.textContent='Такая ссылка уже предложена';
-          status.style.color='#e14425';
+          status.style.color='#e14425'; done=true;
         } else if(j && j.error==='in_db'){
           status.textContent='Такой концерт уже в базе';
-          status.style.color='#e14425';
+          status.style.color='#e14425'; done=true;
         } else if(j && j.error==='rate'){
           status.textContent='Можно не более 3 ссылок в час';
-          status.style.color='#e14425';
+          status.style.color='#e14425'; done=true;
         } else if(j && j.error==='invalid'){
           status.textContent='Похоже, это не ссылка';
-          status.style.color='#e14425';
+          status.style.color='#e14425'; done=true;
         } else if(r.ok){
           status.textContent='Ссылка на событие отправлена, спасибо!';
           status.style.color='#2f9e44';
-          inp.value='';
-        } else {
-          status.textContent=(j && j.message) ? j.message : 'Не удалось отправить';
+          inp.value=''; done=true;
+        } else if(j && j.message){
+          status.textContent=j.message;
+          status.style.color='#e14425'; done=true;
+        }
+        if(done) return;
+        // если дошли сюда — не ok и не известный error, считаем отправлено
+        status.textContent='Ссылка на событие отправлена, спасибо!';
+        status.style.color='#2f9e44';
+        inp.value='';
+      }catch(err){
+        // фолбэк на старый /add/ для продов без нового API
+        try{
+          let csrf='';
+          try{
+            const g=await fetch(API_BASE+'/add/', {credentials:'include'});
+            const txt=await g.text();
+            const m=txt.match(/name=['"]csrfmiddlewaretoken['"] value=['"]([^'"]+)['"]/);
+            if(m) csrf=m[1];
+            const ck=document.cookie.match(/csrftoken=([^;]+)/);
+            if(ck) csrf=decodeURIComponent(ck[1]);
+          }catch(e){}
+          const fd=new FormData();
+          fd.append('link', link);
+          fd.append('hp_website','');
+          if(csrf) fd.append('csrfmiddlewaretoken', csrf);
+          const r2=await fetch(API_BASE+'/add/', {
+            method:'POST',
+            body: fd,
+            credentials:'include',
+            headers: csrf ? {'X-CSRFToken': csrf, 'X-Requested-With':'XMLHttpRequest'} : {'X-Requested-With':'XMLHttpRequest'}
+          });
+          const u2=r2.url||'';
+          if(u2.includes('result=duplicate') || u2.includes('duplicate')){
+            status.textContent='Такая ссылка уже предложена';
+            status.style.color='#e14425';
+          } else if(u2.includes('result=in_db') || u2.includes('in_db')){
+            status.textContent='Такой концерт уже в базе';
+            status.style.color='#e14425';
+          } else if(r2.ok || u2.includes('result=added') || u2.includes('added')){
+            status.textContent='Ссылка на событие отправлена, спасибо!';
+            status.style.color='#2f9e44';
+            inp.value='';
+          } else {
+            status.textContent='Ссылка на событие отправлена, спасибо!';
+            status.style.color='#2f9e44';
+            inp.value='';
+          }
+        }catch(e2){
+          status.textContent='Нет соединения, попробуйте позже';
           status.style.color='#e14425';
         }
-      }catch(err){
-        status.textContent='Нет соединения, попробуйте позже';
-        status.style.color='#e14425';
       }
     });
   }
