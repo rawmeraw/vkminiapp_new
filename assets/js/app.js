@@ -235,11 +235,11 @@ async function loadData(){
         for (const c of list) {
           if (!seen.has(c.slug)) { seen.add(c.slug); state.concerts.push(c); }
         }
-        state.foryouPool=list;
+        state.forYouPool=list;
         state.hasForYou=true;
         console.log('[foryou] pool=', list.map(c=>c.slug));
       } else {
-        state.foryouPool=[]; state.hasForYou=false;
+        state.forYouPool=[]; state.hasForYou=false;
       }
     } else if(vkName){
       state.vkName=vkName;
@@ -1263,7 +1263,7 @@ function wire(){
   els.calOverlay.addEventListener('click', closeCalendar);
   els.sheetOverlay.addEventListener('click', closeSheet);
   $('.sheet__close')?.addEventListener('click', closeSheet);
-  $('#btn-show-all').addEventListener('click',clearDateFilter);
+  $('#btn-show-all').addEventListener('click',()=>openTimeline('upcoming'));
   const btnPropose=document.getElementById('btn-propose');
   if(btnPropose) btnPropose.addEventListener('click',()=>switchTab('add'));
   els.searchInput.addEventListener('input', e=>{
