@@ -254,3 +254,6 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 /* keep emotions markers and toggle visible */
 .pl-map-emotion{display:flex !important}
 .pl-map-emotions-toggle{display:flex !important}
+/* аватарки в попапе эмоций убрать, в концертах оставить */
+.pl-map-emotion-pop__avatar{display:none !important}
+.pl-map-emotion-pop__top{margin:0 20px 8px 0 !important}

@@ -763,14 +763,13 @@ function ensureMapButtons(){
     }
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
-    // right controls — один рабочий fullscreen ниже геопозиции (вторым), лишние удалить
+    // right controls — один рабочий fullscreen, первым (верхняя работает, нижнюю лишнюю убрали)
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
-    // убрать все старые fullscreen (нерабочие) и создать один рабочий вторым
     document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b){ b.remove(); });
     const fsBtn=document.createElement('button');
     fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
@@ -783,15 +782,15 @@ function ensureMapButtons(){
       try{ window.dispatchEvent(new Event('resize')); }catch(e){}
       setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
     };
-    if(controls.children.length>0) controls.insertBefore(fsBtn, controls.children[1] || null);
-    else controls.appendChild(fsBtn);
+    controls.prepend(fsBtn);
   }, 300);
-  // повтор через 1с на случай позднего создания events-map контролов
+  // повтор через 1с на случай позднего создания events-map контролов + убрать лишний fullscreen
   setTimeout(function(){
     const d=document.querySelector('.pl-map-date-btn');
     const m=document.querySelector('.pl-map-mode-btn');
     if(d) d.style.display='inline-flex';
     if(m) m.style.display='inline-flex';
+    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b,i){ if(i>0) b.remove(); });
   }, 1200);
 }
 function showMapError(){
