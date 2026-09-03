@@ -35,7 +35,7 @@ body{overflow:visible !important}
 .pl-header__search input{flex:1;border:0;background:transparent;outline:0;font-size:14px}
 
 /* Main layout */
-#app{padding-top:var(--header-h);padding-bottom:var(--tabbar-h);max-width:1120px;margin:0 auto;min-height:100vh;overflow:visible}
+#app{padding-top:var(--header-h);padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 12px);max-width:1120px;margin:0 auto;min-height:100vh;overflow:visible}
 .view{display:none;padding:0 12px}
 .view--active{display:block;overflow:visible}
 body.map-fullscreen,body.pl-map-fs{overflow:visible !important;height:auto !important}
@@ -205,8 +205,8 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .pl-btn--secondary{background:#fff;color:var(--dark);border:1px solid rgba(0,0,0,.12)}
 .pl-btn:hover{filter:brightness(1.05)}
 
-/* Tabbar */
-.pl-tabbar{position:fixed;left:0;right:0;bottom:0;height:var(--tabbar-h);background:#fff;border-top:1px solid rgba(0,0,0,.08);display:flex;z-index:1100;padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Tabbar — всегда виден, даже в VK и в fullscreen карты */
+.pl-tabbar{position:fixed;left:0;right:0;bottom:0;height:var(--tabbar-h);background:#fff;border-top:1px solid rgba(0,0,0,.08);display:flex;z-index:10005 !important;visibility:visible !important;opacity:1 !important;padding-bottom:env(safe-area-inset-bottom,0px);transform:translateZ(0)}
 .pl-tabbar__btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;color:var(--muted);font-size:10px;font-weight:500;cursor:pointer}
 .pl-tabbar__btn i{font-size:18px}
 .pl-tabbar__btn--active{color:var(--red)}
