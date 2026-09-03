@@ -451,7 +451,8 @@ function fmtUpcomingDate(d, timeStr){
 
 function cardHTML(c, opts={}){
   const isTop10 = !!opts.rank;
-  const isUpcoming = opts.mode==='upcoming' || opts.mode==='date';
+  const isUpcoming = opts.mode==='upcoming';
+  const isDateSlider = opts.mode==='date';
   const rank=opts.rank? `<div class="card-rank">${opts.rank}</div>`:'';
   const ratingVal = c.display_rating||c.cached_rating||'';
   const ratingNum = parseFloat(c.cached_rating||0);
@@ -463,7 +464,6 @@ function cardHTML(c, opts={}){
     if(ratingVal && ratingNum>=4) ratingBadge = `<div class="card-rating-badge ${ratingNum>=5?'featured':''}"><i class="fa-solid fa-star"></i> ${esc(ratingVal)}</div>`;
   }
   const priceTag = c.price===0? 'бесплатно' : c.price? `${c.price}₽`: '';
-  // tag: first + count if >1
   let tagHtml='';
   if(!isTop10){
     if(c.tags && c.tags.length){
@@ -478,10 +478,11 @@ function cardHTML(c, opts={}){
   const img = imgUrl? `<img class="card-img" src="${esc(imgUrl)}" alt="${esc(c.title)}" loading="lazy" decoding="async">` : `<div class="card-img-placeholder"></div>`;
   const slug = c.slug || extractSlug(c.url||'');
   const href = slug ? `https://permlive.ru/event/${esc(slug)}/` : '#';
-  // date text: upcoming -> time if today else short date
   const dObj = parseISO(c.date);
   let dateText='';
-  if(isUpcoming){
+  if(isDateSlider){
+    dateText = c.time ? c.time.slice(0,5) : fmtShortDate(dObj);
+  } else if(isUpcoming){
     dateText = fmtUpcomingDate(dObj, c.time);
   } else {
     dateText = fmtShortDate(dObj);
@@ -933,14 +934,8 @@ async function loadMapForDate(iso){
 
 function switchTab(tab){
   if(tab==='calendar'){
-    // календарь — скролл к календарю на главной
-    switchTab('feed');
-    setTimeout(function(){
-      const cal=document.getElementById('feed-calendar-wrap');
-      if(cal) cal.scrollIntoView({behavior:'smooth', block:'start'});
-      openCalendar();
-    }, 100);
-    return;
+    // по слову календарь — просто главная, без открытия календаря
+    tab='feed';
   }
   state.tab=tab;
   document.body.classList.remove('map-fullscreen','pl-map-fs');
@@ -949,10 +944,11 @@ function switchTab(tab){
   document.body.style.removeProperty('height');
   const calWrap=document.getElementById('feed-calendar-wrap');
   if(calWrap) calWrap.style.removeProperty('display');
-  // header active
+  // header: текущая страница красная — календарь считается главной
   $$('.pl-header-link').forEach(a=>{
-    const isActive = a.dataset.nav===tab || (tab==='feed' && a.dataset.nav==='calendar' && false);
-    a.classList.toggle('active', a.dataset.nav===tab);
+    const nav=a.dataset.nav;
+    const isActive = (nav===tab) || (tab==='feed' && nav==='calendar');
+    a.classList.toggle('active', isActive);
   });
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
@@ -976,19 +972,64 @@ function wire(){
       else switchTab(nav);
     });
   });
-  // add form
+  // add form — упрощённая проверка как на сайте, vk.ru без схемы и кириллица ок
   const addForm=document.getElementById('add-form');
   if(addForm){
+    function isSafeLink(link){
+      if(!link) return false;
+      if(!link.includes('://')) link='https://'+link;
+      try{
+        const u=new URL(link);
+        if(!['http:','https:'].includes(u.protocol)) return false;
+        const host=u.hostname||'';
+        if(!host || !host.includes('.')) return false;
+        if(/\s/.test(host)) return false;
+        // кириллица разрешена (ord>127) как на бэке
+        for(let i=0;i<host.length;i++){
+          const c=host[i], code=c.charCodeAt(0);
+          if(!( /[a-zA-Z0-9.-_]/.test(c) || code>127)) return false;
+        }
+        return true;
+      }catch(e){ return false; }
+    }
+    function normalizeForMatch(raw){
+      if(!raw) return '';
+      raw=raw.trim();
+      if(!raw.includes('://')) raw='https://'+raw;
+      try{
+        const u=new URL(raw);
+        let host=(u.hostname||'').toLowerCase();
+        if(host.startsWith('www.')) host=host.slice(4);
+        let path=u.pathname||'';
+        if(path!=='/' && path.endsWith('/')) path=path.slice(0,-1);
+        return (host+path).toLowerCase();
+      }catch(e){ return ''; }
+    }
     addForm.addEventListener('submit', async function(e){
       e.preventDefault();
       const inp=document.getElementById('add-link');
       const status=document.getElementById('add-status');
       let link=(inp.value||'').trim();
       if(!link){ status.textContent='Вставь ссылку'; status.style.color='#e14425'; return; }
+      if(!isSafeLink(link)){
+        status.textContent='Похоже, это не ссылка. Проверь и попробуй ещё раз.';
+        status.style.color='#e14425'; return;
+      }
       if(!link.includes('://')) link='https://'+link;
+      // правильная проверка дубликата по link полям концертов (нормализовано) как на бэке find_matching_concert
+      const norm=normalizeForMatch(link);
+      let already=null;
+      for(const c of state.concerts){
+        if(c.link && normalizeForMatch(c.link)===norm){ already=c; break; }
+        // также проверяем slug url
+        if(c.slug && normalizeForMatch('https://permlive.ru/event/'+c.slug)===norm){ already=c; break; }
+      }
+      if(already){
+        status.textContent='Такой концерт уже есть на сайте';
+        status.style.color='#e14425'; return;
+      }
       status.textContent='Отправляю...'; status.style.color='#666';
       try{
-        // получить csrf
         let csrf='';
         try{
           const g=await fetch(API_BASE+'/add/', {credentials:'include'});
@@ -1008,18 +1049,26 @@ function wire(){
           credentials:'include',
           headers: csrf ? {'X-CSRFToken': csrf, 'X-Requested-With':'XMLHttpRequest'} : {'X-Requested-With':'XMLHttpRequest'}
         });
-        // add view redirects with ?result=added etc, but for github we check status
-        if(r.ok || r.redirected){
+        const finalUrl=r.url||'';
+        if(finalUrl.includes('result=duplicate')){
+          status.textContent='Такая ссылка уже предложена';
+          status.style.color='#e14425';
+        } else if(finalUrl.includes('result=in_db')){
+          status.textContent='Такой концерт уже в базе';
+          status.style.color='#e14425';
+        } else if(finalUrl.includes('result=published')){
+          status.textContent='Концерт уже опубликован';
+          status.style.color='#e14425';
+        } else if(r.ok || finalUrl.includes('result=added')){
           status.textContent='Спасибо! Ссылка отправлена, проверю и добавлю.';
           status.style.color='#2f9e44';
           inp.value='';
         } else {
-          const t=await r.text();
-          if(t.includes('duplicate')){ status.textContent='Такая ссылка уже есть'; status.style.color='#e14425'; }
-          else { status.textContent='Отправлено'; status.style.color='#2f9e44'; inp.value=''; }
+          status.textContent='Отправлено';
+          status.style.color='#2f9e44';
+          inp.value='';
         }
       }catch(err){
-        // fallback — открыть в новой вкладке
         window.open(API_BASE+'/add/', '_blank');
         status.textContent='Открыл страницу добавления в новой вкладке';
         status.style.color='#666';
