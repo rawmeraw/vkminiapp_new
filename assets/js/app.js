@@ -72,18 +72,17 @@ function hashColor(str){
 }
 function optimizeMiniImage(url){
   if(!url || typeof url!=='string') return url;
-  // same logic as homepage/templatetags/extras.py _optimize_vk_image but mini size 200x200
   try{
     if(url.includes('vkuserphoto.ru') || url.includes('userapi.com')){
-      // VK: cs=360x0 or cs=540x540 -> replace with 200x200 for miniapp speed
-      if(url.match(/cs=\d+x\d+/)) return url.replace(/cs=\d+x\d+/, 'cs=200x200');
+      // keep 400-540 like site, 200 too small and may 404 for some sizes — use 400
+      if(url.match(/cs=\d+x\d+/)) return url.replace(/cs=\d+x\d+/, 'cs=400x400');
       const sep = url.includes('?') ? '&' : '?';
-      return url + sep + 'cs=200x200';
+      return url + sep + 'cs=400x400';
     }
-    if(url.includes('cdn.qtickets.tech')) return url; // keep as is, hash bound
+    if(url.includes('cdn.qtickets.tech')) return url;
     if(url.includes('ponominalu.ru/media/i/')) return url.replace(/\/media\/i\/\d+x\d+\//, '/media/i/400x300/');
-    if(url.includes('live.mts.ru/image/')) return url; // keep
-    if(url.includes('mycdn.me') && url.includes('size=')) return url.replace(/size=[^&]+/, 'size=200x200');
+    if(url.includes('live.mts.ru/image/')) return url;
+    if(url.includes('mycdn.me') && url.includes('size=')) return url.replace(/size=[^&]+/, 'size=400x400');
   }catch(e){}
   return url;
 }
@@ -143,9 +142,9 @@ async function loadData(){
     state.datesWithEvents=new Set(cal.dates);
     if(cal.today) state.todayISO=cal.today;
   }
-  // we show only 20 images on screen, no need 80/500 — limit 30 for speed
+  // we show only 20 images but top10 needs correct ordering across future — fetch 80 for correct rock saturday order
   let pool = [];
-  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30`, 5*60*1000);
+  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=80`, 5*60*1000);
   if(api){
     const results = Array.isArray(api.results)?api.results: Array.isArray(api)?api: [];
     pool = results.map(normalizeApiConcert).filter(c=>c.slug && c.date);
