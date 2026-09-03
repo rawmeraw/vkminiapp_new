@@ -38,7 +38,6 @@
                 return;
             }
             var key = settings().apiKey;
-            // на github.io ключ с Referer permlive.ru может дать 403 — пробуем с ключом, при ошибке без ключа
             loadScript(buildLoaderUrl(key))
                 .then(function () {
                     if (!window.ymaps3) {
@@ -47,19 +46,7 @@
                     }
                     window.ymaps3.ready.then(resolve).catch(reject);
                 })
-                .catch(function (e) {
-                    if (key) {
-                        // fallback без ключа для github.io (действует лимит, но карта покажется)
-                        loadScript(buildLoaderUrl(''))
-                            .then(function () {
-                                if (!window.ymaps3) { reject(e); return; }
-                                window.ymaps3.ready.then(resolve).catch(reject);
-                            })
-                            .catch(reject);
-                    } else {
-                        reject(e);
-                    }
-                });
+                .catch(reject);
         });
         return corePromise;
     }

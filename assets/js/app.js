@@ -123,18 +123,29 @@ async function fetchJSON(url){
     return await r.json();
   }catch(e){ console.warn('fetch failed', url, e); return null; }
 }
+function cachedFetch(key, url, ttlMs){
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw){
+      const o=JSON.parse(raw);
+      if(o && o.t && Date.now()-o.t < ttlMs && o.v) return Promise.resolve(o.v);
+    }
+  }catch(e){}
+  return fetchJSON(url).then(function(v){
+    if(v) try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), v:v})); }catch(e){}
+    return v;
+  });
+}
 
 async function loadData(){
-  const cal = await fetchJSON(`${API_BASE}/api/calendar-dates/`);
+  const cal = await cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 5*60*1000);
   if(cal && Array.isArray(cal.dates)){
     state.datesWithEvents=new Set(cal.dates);
     if(cal.today) state.todayISO=cal.today;
-    // keep no selection by default per request (don't set selectedDate to today)
-  } else {
   }
-  // fetch concerts pool — use open api /api/concerts/?limit=500
+  // fetch concerts pool — limit 80 for github pages speed (was 500, too heavy)
   let pool = [];
-  const api = await fetchJSON(`${API_BASE}/api/concerts/?limit=500`);
+  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=80`, 5*60*1000);
   if(api){
     const results = Array.isArray(api.results)?api.results: Array.isArray(api)?api: [];
     pool = results.map(normalizeApiConcert).filter(c=>c.slug && c.date);
