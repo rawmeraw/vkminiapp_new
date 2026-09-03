@@ -1034,12 +1034,20 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var delBtn = canDelete
             ? '<button type="button" class="pl-map-emotion-pop__delete">Удалить эмоцию</button>'
             : '';
+        /* VKMINI: имя — ссылкой на страницу VK, если backend отдал vk_uid */
+        var userHtml = '<span class="pl-map-emotion-pop__user">' + escapeHtml(em.user || 'Пользователь') + '</span>';
+        try{
+            if(em.vk_uid){
+                var vku = String(em.vk_uid).replace(/^-/, '');
+                userHtml = '<a class="pl-map-emotion-pop__user pl-map-emotion-pop__user-link" href="https://vk.com/id' + encodeURIComponent(vku) + '" target="_blank" rel="noopener">' + escapeHtml(em.user || 'Пользователь') + '</a>';
+            }
+        }catch(e){}
         emotionPopEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
             '<div class="pl-map-emotion-pop__top">' +
             '<div class="pl-map-emotion-pop__avatar">' + avatar + '</div>' +
             '<div><span class="pl-map-emotion-pop__emoji" aria-hidden="true">' + escapeHtml(em.emoji) + '</span>' +
-            '<span class="pl-map-emotion-pop__user">' + escapeHtml(em.user || 'Пользователь') + '</span></div>' +
+            userHtml + '</div>' +
             '</div>' +
             (em.text ? '<p class="pl-map-emotion-pop__text">' + escapeHtml(em.text) + '</p>' : '') +
             '<p class="pl-map-emotion-pop__meta">' + relativeTime(em.created_at) + '</p>' +

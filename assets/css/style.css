@@ -290,6 +290,5 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 /* keep emotions markers and toggle visible */
 .pl-map-emotion{display:flex !important}
 .pl-map-emotions-toggle{display:flex !important}
-/* аватарки в попапе эмоций убрать, в концертах оставить */
-.pl-map-emotion-pop__avatar{display:none !important}
-.pl-map-emotion-pop__top{margin:0 20px 8px 0 !important}
+/* аватарка в попапе эмоций как на сайте + имя-ссылка на VK */
+.pl-map-emotion-pop__user-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
