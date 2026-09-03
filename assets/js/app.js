@@ -162,11 +162,11 @@ function cachedFetch(key, url, ttlMs){
 }
 
 async function loadData(){
-  // календарь + концерты параллельно, маленькими порциями для скорости
+  // календарь + вся афиша в лёгком short-формате + топ по рейтингу
   const [calRes, byDateRes, byRatingRes] = await Promise.allSettled([
     cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 60*60*1000),
-    cachedFetch('pl_concerts_date_'+state.todayISO, `${API_BASE}/api/concerts/?limit=120`, 5*60*1000),
-    cachedFetch('pl_concerts_top_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30&order=rating`, 5*60*1000),
+    cachedFetch('pl2_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=500&short=1`, 10*60*1000),
+    cachedFetch('pl2_top_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30&order=rating&short=1`, 10*60*1000),
   ]).then(rs => rs.map(r => r.status === 'fulfilled' ? r.value : null));
   if(calRes && Array.isArray(calRes.dates)){
     state.datesWithEvents = new Set(calRes.dates);
@@ -610,6 +610,7 @@ function renderSliders(){
     // foryou — третий слайдер как на сайте, только если есть рекомендации
     if(els.sliderForyou){
       const shouldShow = state.hasForYou && state.forYouPool.length>0;
+      console.log('[foryou] render: hasForYou=', state.hasForYou, 'pool=', state.forYouPool.length, 'show=', shouldShow);
       els.sliderForyou.style.display = shouldShow ? '' : 'none';
       if(shouldShow){
         renderSlider(els.sliderForyou, els.foryouRow, state.forYouPool, state.forYouPool.length, 'foryou', 'Рекомендации для вас');
@@ -625,6 +626,7 @@ function renderSliders(){
     els.sliderDate.style.display='none';
     els.sliderTop10.style.display='none';
     els.sliderUpcoming.style.display='none';
+    if(els.sliderForyou) els.sliderForyou.style.display='none';
     els.timelineWrap.style.display='';
   }
 }
@@ -677,6 +679,14 @@ function renderTimeline(){
   els.timeline.innerHTML='';
   if(!list.length){
     els.timelineEmpty.classList.remove('hidden');
+    const emptyText = document.getElementById('timeline-empty-text');
+    if(emptyText){
+      emptyText.innerHTML = state.timelineMode==='search'
+        ? '<i class="fas fa-search"></i> По данному поисковому запросу концертов не найдено'
+        : '<i class="fas fa-calendar-xmark"></i> На эту дату концертов нет';
+    }
+    const btnPropose = document.getElementById('btn-propose');
+    if(btnPropose) btnPropose.style.display = state.timelineMode==='search' ? '' : 'none';
     return;
   }
   els.timelineEmpty.classList.add('hidden');
@@ -735,7 +745,7 @@ function applyFilter(){
   } else if(state.timelineMode==='foryou'){
     list = [...state.forYouPool].slice(0,80);
   } else if(state.timelineMode==='upcoming'){
-    list = [...state.upcomingPool].slice(0,80);
+    list = [...state.upcomingPool].slice(0,400);
   } else if(state.timelineMode==='date'){
     list = state.concerts.filter(c=> c.date===state.selectedDate);
   } else if(state.timelineMode==='range'){
@@ -1254,6 +1264,8 @@ function wire(){
   els.sheetOverlay.addEventListener('click', closeSheet);
   $('.sheet__close')?.addEventListener('click', closeSheet);
   $('#btn-show-all').addEventListener('click',clearDateFilter);
+  const btnPropose=document.getElementById('btn-propose');
+  if(btnPropose) btnPropose.addEventListener('click',()=>switchTab('add'));
   els.searchInput.addEventListener('input', e=>{
     state.query=e.target.value;
     if(state.query.trim()) state.timelineMode='search';

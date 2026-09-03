@@ -220,6 +220,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .sheet__actions{display:flex;gap:8px;margin-top:14px}
 .pl-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;border:0;background:var(--red);color:#fff;font-weight:600;cursor:pointer}
 .pl-btn--secondary{background:#fff;color:var(--dark);border:1px solid rgba(0,0,0,.12)}
+.pl-btn--green{background:#2f9e44}
 .pl-btn:hover{filter:brightness(1.05)}
 
 /* Tabbar — только на мобильных, с подписями; на десктопе — хедер */

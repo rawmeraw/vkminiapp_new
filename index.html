@@ -23,8 +23,8 @@
   <!-- Yandex Maps JS API v3 — ключ только для vkminiapp_new -->
   <script>window.PermLiveMapSettings={apiKey:'30ae02d3-cd24-4741-849d-947b8c46c1a9'};window.PermLiveMapData={events:[],today:'',defaultDate:'',emotionDate:'',csrf:'',emotionMe:{is_auth:false}};</script>
 
-  <link rel="stylesheet" href="./assets/css/style.css">
-  <link rel="stylesheet" href="./assets/css/maps.css">
+  <link rel="stylesheet" href="./assets/css/style.css?v=20260904">
+  <link rel="stylesheet" href="./assets/css/maps.css?v=20260904">
 </head>
 <body>
   <!-- Header — без футера, навигация в хедере -->
@@ -116,8 +116,11 @@
       <div id="timeline-wrap" class="timeline-wrap">
         <div id="concert-container" class="cascade-element"></div>
         <div id="timeline-empty" class="timeline-empty hidden">
-          <p><i class="fas fa-calendar-xmark"></i> На эту дату концертов нет</p>
-          <button id="btn-show-all" class="pl-btn">Показать все ближайшие</button>
+          <p id="timeline-empty-text"><i class="fas fa-calendar-xmark"></i> На эту дату концертов нет</p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button id="btn-show-all" class="pl-btn">Показать все ближайшие</button>
+            <button id="btn-propose" class="pl-btn pl-btn--green" style="display:none">Предложить концерт</button>
+          </div>
         </div>
       </div>
     </section>
@@ -172,8 +175,8 @@
   <!-- Toast -->
   <div id="toast" class="pl-toast"></div>
 
-  <script src="./assets/js/maps/map-core.js" defer></script>
-  <script src="./assets/js/maps/events-map.js" defer></script>
-  <script type="module" src="./assets/js/app.js"></script>
+  <script src="./assets/js/maps/map-core.js?v=20260904" defer></script>
+  <script src="./assets/js/maps/events-map.js?v=20260904" defer></script>
+  <script type="module" src="./assets/js/app.js?v=20260904"></script>
 </body>
 </html>
