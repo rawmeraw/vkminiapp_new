@@ -248,11 +248,11 @@ async function loadData(){
         for (const c of list) {
           if (!seen.has(c.slug)) { seen.add(c.slug); state.concerts.push(c); }
         }
-        state.foryouPool=list;
+        state.forYouPool=list;
         state.hasForYou=true;
         console.log('[foryou] pool=', list.map(c=>c.slug));
       } else {
-        state.foryouPool=[]; state.hasForYou=false;
+        state.forYouPool=[]; state.hasForYou=false;
       }
     } else if(vkName){
       state.vkName=vkName;
