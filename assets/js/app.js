@@ -607,6 +607,7 @@ function renderSliders(){
     els.sliderDate.style.display='';
     els.sliderTop10.style.display='none';
     els.sliderUpcoming.style.display='none';
+    if(els.sliderForyou) els.sliderForyou.style.display='none';
     els.dateTitleText.textContent=title;
     renderSlider(els.sliderDate, els.dateRow, list, total, 'date', title);
     els.dateTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
@@ -1075,14 +1076,12 @@ function updateForyouOption(){
   if(!dd) return;
   const foryouOpt=dd.querySelector('[data-mode="foryou"]');
   if(!foryouOpt) return;
-  let hasForDay=false;
-  if(state.hasForYou && state.forYouPool.length){
-    if(state.range) hasForDay=state.forYouPool.some(function(c){ return c.date>=state.range.start && c.date<=state.range.end; });
-    else if(state.selectedDate) hasForDay=state.forYouPool.some(function(c){ return c.date===state.selectedDate; });
-    else hasForDay=state.forYouPool.some(function(c){ return c.date===state.todayISO; });
-  }
-  foryouOpt.style.display = hasForDay ? '' : 'none';
-  if(!hasForDay && state.mapMode==='foryou'){
+  // пункт «Для вас» виден всегда, когда у пользователя есть рекомендации, —
+  // иначе его не найти в день без рекомендаций на сегодня
+  const hasAny = state.hasForYou && state.forYouPool.length>0;
+  console.log('[foryou] map option: hasForYou=', state.hasForYou, 'pool=', state.forYouPool.length, 'show=', hasAny);
+  foryouOpt.style.display = hasAny ? '' : 'none';
+  if(!hasAny && state.mapMode==='foryou'){
     state.mapMode='all';
     const allOpt=dd.querySelector('[data-mode="all"]');
     const modeBtn=document.querySelector('.pl-map-mode-btn');
