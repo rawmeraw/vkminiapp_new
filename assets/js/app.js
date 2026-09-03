@@ -1070,11 +1070,16 @@ function switchTab(tab){
   document.body.style.removeProperty('height');
   const calWrap=document.getElementById('feed-calendar-wrap');
   if(calWrap) calWrap.style.removeProperty('display');
-  // header: текущая страница красная — календарь считается главной
+  // header + footer: текущая страница красная
   $$('.pl-header-link').forEach(a=>{
     const nav=a.dataset.nav;
     const isActive = (nav===tab) || (tab==='feed' && nav==='calendar');
     a.classList.toggle('active', isActive);
+  });
+  $$('.pl-tabbar__btn').forEach(b=>{
+    const isActive = b.dataset.tab===tab;
+    b.classList.toggle('pl-tabbar__btn--active', isActive);
+    b.setAttribute('aria-selected', String(isActive));
   });
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
