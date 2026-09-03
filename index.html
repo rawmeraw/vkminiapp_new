@@ -35,9 +35,9 @@
         <span class="pl-logo__text">Живое!</span>
       </a>
       <nav class="pl-header-nav" aria-label="Навигация">
-        <a href="#" class="pl-header-link" data-nav="calendar"><i class="fa-solid fa-calendar"></i> Календарь</a>
-        <a href="#" class="pl-header-link" data-nav="map"><i class="fa-solid fa-map-location-dot"></i> Карта</a>
-        <a href="#" class="pl-header-link" data-nav="add"><i class="fa-solid fa-plus"></i> Предложить концерт</a>
+        <a href="#" class="pl-header-link" data-nav="calendar"><i class="fa-solid fa-calendar"></i><span>Календарь</span></a>
+        <a href="#" class="pl-header-link" data-nav="map"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></a>
+        <a href="#" class="pl-header-link" data-nav="add"><i class="fa-solid fa-plus"></i><span>Предложить концерт</span></a>
       </nav>
     </div>
   </header>
@@ -84,6 +84,17 @@
             <a class="section-count-badge" id="upcoming-badge" style="display:none"></a>
           </h2>
           <div class="horizontal-slider-row" id="upcoming-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
+
+        <!-- Для вас (VK рекомендации) — как на сайте, только если есть -->
+        <div class="horizontal-slider foryou" id="slider-foryou" style="display:none">
+          <h2 class="section-title">
+            <a class="section-header-wrapper" id="foryou-title-link" href="#"><i class="fa-solid fa-heart"></i> Рекомендации для вас</a>
+            <a class="section-count-badge" id="foryou-badge" style="display:none"></a>
+          </h2>
+          <div class="horizontal-slider-row" id="foryou-row"></div>
           <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
           <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
         </div>

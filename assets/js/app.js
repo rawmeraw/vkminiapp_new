@@ -28,6 +28,10 @@ const els = {
   viewMap: $('#view-map'),
   viewAdd: $('#view-add'),
   calendarInner: $('#calendar-dates-inner'),
+  foryouRow: $('#foryou-row'),
+  sliderForyou: $('#slider-foryou'),
+  foryouBadge: $('#foryou-badge'),
+  foryouTitleLink: $('#foryou-title-link'),
   calOverlay: $('#cal-overlay'),
   calModal: $('#cal-modal'),
   top10Row: $('#top10-row'),
@@ -117,12 +121,15 @@ function extractSlug(urlOrSlug){
 
 const state = {
   tab: 'feed',
-  selectedDate: null, // no day selected by default (per request)
+  selectedDate: null,
   range: null,
   datesWithEvents: new Set(),
   concerts: [],
   upcomingPool: [],
   top10Pool: [],
+  forYouPool: [],
+  vkUserId: null,
+  hasForYou: false,
   filtered: [],
   query: '',
   map: null,
@@ -197,14 +204,39 @@ async function loadData(){
       if(order.length){
         const bySlug = new Map(state.top10Pool.map(c=>[c.slug,c]));
         const reordered = order.map(s=>bySlug.get(s)).filter(Boolean);
-        // добавить оставшиеся, сохраняя рейтинг-порядок
         const remaining = state.top10Pool.filter(c=>!order.includes(c.slug));
         state.top10Pool = [...reordered, ...remaining].slice(0,10);
-        // если HTML дал 10, используем его
         if(reordered.length>=10) state.top10Pool = reordered.slice(0,10);
       }
     }
   }catch(e){}
+  // VK рекомендации — если пользователь привязан через allauth
+  try{
+    let vkId=null;
+    const urlParams=new URLSearchParams(window.location.search);
+    vkId=urlParams.get('vk_user_id') || urlParams.get('vk_user-id') || urlParams.get('uid');
+    if(!vkId && window.vkBridge){
+      try{
+        const u=await bridge.send('VKWebAppGetUserInfo');
+        if(u && u.id) vkId=String(u.id);
+      }catch(err){}
+    }
+    if(!vkId){
+      try{
+        const lp=await bridge.send('VKWebAppGetLaunchParams');
+        if(lp && lp.vk_user_id) vkId=String(lp.vk_user_id);
+      }catch(err){}
+    }
+    if(vkId){
+      state.vkUserId=vkId;
+      const rec=await cachedFetch('vk_rec_'+vkId, `${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`, 5*60*1000);
+      if(rec && rec.has_user && rec.has_recommendations && Array.isArray(rec.results) && rec.results.length){
+        const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
+        state.foryouPool=list;
+        state.hasForYou=true;
+      }
+    }
+  }catch(e){ console.warn('vk rec failed',e); }
 }
 
 function normalizeApiConcert(c){
@@ -551,14 +583,13 @@ function renderSliders(){
     els.dateBadge.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
     els.timelineWrap.style.display='none';
   } else if(!hasDateFilter && !showTimeline){
-    // No date filter, no timeline: show top10 + upcoming
+    // No date filter, no timeline: show top10 + upcoming + foryou if has
     els.sliderDate.style.display='none';
     els.sliderTop10.style.display='';
     els.sliderUpcoming.style.display='';
     els.timelineWrap.style.display='none';
     const top10Total = state.top10Pool.length;
     renderSlider(els.sliderTop10, els.top10Row, state.top10Pool, top10Total, 'top10', 'Топ-10');
-    // топ-10 не должен быть ссылкой на таймлайн (per request)
     els.top10TitleLink.onclick=null;
     els.top10TitleLink.style.cursor='default';
     els.top10TitleLink.removeAttribute('href');
@@ -567,6 +598,19 @@ function renderSliders(){
     renderSlider(els.sliderUpcoming, els.upcomingRow, state.upcomingPool, upcomingTotal, 'upcoming', 'Ближайшие');
     els.upcomingTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
     els.upcomingBadge.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
+    // foryou — третий слайдер как на сайте, только если есть рекомендации
+    if(els.sliderForyou){
+      const shouldShow = state.hasForYou && state.forYouPool.length>0;
+      els.sliderForyou.style.display = shouldShow ? '' : 'none';
+      if(shouldShow){
+        renderSlider(els.sliderForyou, els.foryouRow, state.forYouPool, state.forYouPool.length, 'foryou', 'Рекомендации для вас');
+        if(els.foryouTitleLink) els.foryouTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('foryou')};
+        if(els.foryouBadge){
+          if(state.forYouPool.length>10){ els.foryouBadge.textContent=`Смотреть все ${state.forYouPool.length}`; els.foryouBadge.style.display='inline-flex'; els.foryouBadge.onclick=(e)=>{e.preventDefault(); openTimeline('foryou')}; }
+          else els.foryouBadge.style.display='none';
+        }
+      }
+    }
   } else {
     // timeline mode: hide all sliders
     els.sliderDate.style.display='none';
@@ -794,7 +838,7 @@ function ensureMapButtons(){
       els.mapEl.appendChild(modeBtn);
       const dd=document.createElement('div');
       dd.className='pl-map-mode-dropdown';
-      dd.innerHTML='<button class="pl-map-mode-dropdown__opt pl-map-mode-dropdown__opt--active" data-mode="all">Все концерты</button><button class="pl-map-mode-dropdown__opt" data-mode="free">Бесплатные</button>';
+      dd.innerHTML='<button class="pl-map-mode-dropdown__opt pl-map-mode-dropdown__opt--active" data-mode="all">Все концерты</button><button class="pl-map-mode-dropdown__opt" data-mode="free">Бесплатные</button><button class="pl-map-mode-dropdown__opt" data-mode="foryou" style="display:none">Для вас</button>';
       els.mapEl.appendChild(dd);
       modeBtn.onclick=function(){ dd.classList.toggle('pl-map-mode-dropdown--open'); };
       dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(b){
@@ -809,6 +853,29 @@ function ensureMapButtons(){
     }
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
+    // показать Для вас только если есть рекомендации на выбранный день
+    (function(){
+      const dd=document.querySelector('.pl-map-mode-dropdown');
+      if(!dd) return;
+      const foryouOpt=dd.querySelector('[data-mode="foryou"]');
+      if(!foryouOpt) return;
+      let hasForDay=false;
+      if(state.hasForYou && state.forYouPool.length){
+        if(state.selectedDate) hasForDay=state.forYouPool.some(function(c){ return c.date===state.selectedDate; });
+        else if(state.range) hasForDay=state.forYouPool.some(function(c){ return c.date>=state.range.start && c.date<=state.range.end; });
+        else hasForDay=state.forYouPool.some(function(c){ return c.date===state.todayISO; });
+        // если на выбранный день нет, но есть вообще — показать всё равно? по ТЗ только если есть на день
+      }
+      foryouOpt.style.display = hasForDay ? '' : 'none';
+      if(!hasForDay && state.mapMode==='foryou'){
+        state.mapMode='all';
+        const allOpt=dd.querySelector('[data-mode="all"]');
+        if(allOpt){
+          dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(x){ x.classList.toggle('pl-map-mode-dropdown__opt--active', x===allOpt); });
+          modeBtn.querySelector('span').textContent=allOpt.textContent;
+        }
+      }
+    })();
     // right controls — один рабочий fullscreen ниже геопозиции, зум в том же столбце, посвободнее
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
@@ -839,17 +906,40 @@ function ensureMapButtons(){
     zin.className='pl-map-control-btn';
     zin.title='Приблизить';
     zin.innerHTML='<i class="fa-solid fa-plus"></i>';
-    zin.onclick=function(){ try{ const y=document.querySelector('.ymaps3x-zoom-control button:first-child'); if(y) y.click(); }catch(e){} };
+    zin.onclick=function(){
+      try{
+        const m=window.Perm || (window.PermLiveMaps && window.PermLiveMaps._map);
+        let cur=12;
+        if(m){
+          if(typeof m.getZoom==='function') cur=m.getZoom();
+          else if(typeof m.zoom==='number') cur=m.zoom;
+          else if(m.camera && typeof m.camera.zoom==='number') cur=m.camera.zoom;
+        }
+        const nz=Math.min(19, cur+1);
+        if(m && m.setLocation) m.setLocation({zoom:nz, duration:200});
+      }catch(e){}
+    };
     const zout=document.createElement('button');
     zout.className='pl-map-control-btn';
     zout.title='Отдалить';
     zout.innerHTML='<i class="fa-solid fa-minus"></i>';
-    zout.onclick=function(){ try{ const y=document.querySelector('.ymaps3x-zoom-control button:last-child'); if(y) y.click(); }catch(e){} };
+    zout.onclick=function(){
+      try{
+        const m=window.Perm || (window.PermLiveMaps && window.PermLiveMaps._map);
+        let cur=12;
+        if(m){
+          if(typeof m.getZoom==='function') cur=m.getZoom();
+          else if(typeof m.zoom==='number') cur=m.zoom;
+        }
+        const nz=Math.max(4, cur-1);
+        if(m && m.setLocation) m.setLocation({zoom:nz, duration:200});
+      }catch(e){}
+    };
     controls.appendChild(zin);
     controls.appendChild(zout);
     controls.style.width='56px';
     controls.style.padding='6px';
-    controls.style.gap='10px';
+    controls.style.gap='6px';
   }, 300);
   // повтор через 1с — левые кнопки и лишний fullscreen
   setTimeout(function(){
@@ -1008,7 +1098,7 @@ function wire(){
       else switchTab(nav);
     });
   });
-  // add form — упрощённая проверка как на сайте, vk.ru без схемы и кириллица ок
+  // add form — vk.ru без схемы и кириллица, проверка по link полям, API без CSRF
   const addForm=document.getElementById('add-form');
   if(addForm){
     function isSafeLink(link){
@@ -1020,26 +1110,12 @@ function wire(){
         const host=u.hostname||'';
         if(!host || !host.includes('.')) return false;
         if(/\s/.test(host)) return false;
-        // кириллица разрешена (ord>127) как на бэке
         for(let i=0;i<host.length;i++){
           const c=host[i], code=c.charCodeAt(0);
           if(!( /[a-zA-Z0-9.-_]/.test(c) || code>127)) return false;
         }
         return true;
       }catch(e){ return false; }
-    }
-    function normalizeForMatch(raw){
-      if(!raw) return '';
-      raw=raw.trim();
-      if(!raw.includes('://')) raw='https://'+raw;
-      try{
-        const u=new URL(raw);
-        let host=(u.hostname||'').toLowerCase();
-        if(host.startsWith('www.')) host=host.slice(4);
-        let path=u.pathname||'';
-        if(path!=='/' && path.endsWith('/')) path=path.slice(0,-1);
-        return (host+path).toLowerCase();
-      }catch(e){ return ''; }
     }
     addForm.addEventListener('submit', async function(e){
       e.preventDefault();
@@ -1052,62 +1128,41 @@ function wire(){
         status.style.color='#e14425'; return;
       }
       if(!link.includes('://')) link='https://'+link;
-      // правильная проверка дубликата по link полям концертов (нормализовано) как на бэке find_matching_concert
-      const norm=normalizeForMatch(link);
-      let already=null;
-      for(const c of state.concerts){
-        if(c.link && normalizeForMatch(c.link)===norm){ already=c; break; }
-        // также проверяем slug url
-        if(c.slug && normalizeForMatch('https://permlive.ru/event/'+c.slug)===norm){ already=c; break; }
-      }
-      if(already){
-        status.textContent='Такой концерт уже есть на сайте';
-        status.style.color='#e14425'; return;
-      }
       status.textContent='Отправляю...'; status.style.color='#666';
       try{
-        let csrf='';
-        try{
-          const g=await fetch(API_BASE+'/add/', {credentials:'include'});
-          const txt=await g.text();
-          const m=txt.match(/name=['"]csrfmiddlewaretoken['"] value=['"]([^'"]+)['"]/);
-          if(m) csrf=m[1];
-          const ck=document.cookie.match(/csrftoken=([^;]+)/);
-          if(ck) csrf=decodeURIComponent(ck[1]);
-        }catch(err){}
-        const fd=new FormData();
-        fd.append('link', link);
-        fd.append('hp_website','');
-        if(csrf) fd.append('csrfmiddlewaretoken', csrf);
-        const r=await fetch(API_BASE+'/add/', {
+        const r=await fetch(API_BASE+'/api/vk/propose/', {
           method:'POST',
-          body: fd,
-          credentials:'include',
-          headers: csrf ? {'X-CSRFToken': csrf, 'X-Requested-With':'XMLHttpRequest'} : {'X-Requested-With':'XMLHttpRequest'}
+          headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+          body: JSON.stringify({link: link, vk_user_id: state.vkUserId||''})
         });
-        const finalUrl=r.url||'';
-        if(finalUrl.includes('result=duplicate')){
+        const j=await r.json().catch(()=>null);
+        if(j && j.ok){
+          status.textContent='Ссылка на событие отправлена, спасибо!';
+          status.style.color='#2f9e44';
+          inp.value='';
+        } else if(j && j.error==='duplicate'){
           status.textContent='Такая ссылка уже предложена';
           status.style.color='#e14425';
-        } else if(finalUrl.includes('result=in_db')){
+        } else if(j && j.error==='in_db'){
           status.textContent='Такой концерт уже в базе';
           status.style.color='#e14425';
-        } else if(finalUrl.includes('result=published')){
-          status.textContent='Концерт уже опубликован';
+        } else if(j && j.error==='rate'){
+          status.textContent='Можно не более 3 ссылок в час';
           status.style.color='#e14425';
-        } else if(r.ok || finalUrl.includes('result=added')){
-          status.textContent='Спасибо! Ссылка отправлена, проверю и добавлю.';
+        } else if(j && j.error==='invalid'){
+          status.textContent='Похоже, это не ссылка';
+          status.style.color='#e14425';
+        } else if(r.ok){
+          status.textContent='Ссылка на событие отправлена, спасибо!';
           status.style.color='#2f9e44';
           inp.value='';
         } else {
-          status.textContent='Отправлено';
-          status.style.color='#2f9e44';
-          inp.value='';
+          status.textContent=(j && j.message) ? j.message : 'Не удалось отправить';
+          status.style.color='#e14425';
         }
       }catch(err){
-        window.open(API_BASE+'/add/', '_blank');
-        status.textContent='Открыл страницу добавления в новой вкладке';
-        status.style.color='#666';
+        status.textContent='Нет соединения, попробуйте позже';
+        status.style.color='#e14425';
       }
     });
   }
