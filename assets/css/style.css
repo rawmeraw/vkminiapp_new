@@ -218,3 +218,24 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 /* Leaflet balloon */
 .leaflet-popup-content{margin:12px 14px;line-height:1.4}
 .leaflet-popup-content b{font-size:14px}
+
+/* Desktop map width like main page — centered 1120, mobile full width */
+@media (min-width: 768px){
+  #view-map{max-width:1120px;margin:0 auto;padding:0 16px}
+  #view-map #map{position:relative !important;top:auto !important;left:auto !important;width:100% !important;height:600px !important;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+}
+@media (max-width:767px){
+  #view-map{padding:0}
+  #view-map #map{border-radius:0}
+}
+
+/* VK miniapp map — hide emotions/propose and "для вас" */
+.pl-map-emotions-toggle,
+.pl-map-flower,
+.pl-map-flower-overlay,
+.pl-map-emotion,
+.pl-map-emotion-composer,
+.pl-map-emotion-overlay,
+.pl-map-propose-composer,
+.pl-map-propose-overlay{display:none !important}
+.pl-map-mode-dropdown__opt[data-mode="foryou"]{display:none !important}
