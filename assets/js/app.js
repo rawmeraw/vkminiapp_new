@@ -688,12 +688,12 @@ function initMap(){
   if(window.PermLiveMaps && window.PermLiveMaps.loadCore){
     window.PermLiveMaps.loadCore().then(function(){
       yandexReady=true;
-      // site's events-map.js уже создал карту в #map, используем его API
       state.map = {
         setCenter: function(){},
         setView: function(){},
         invalidateSize: function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }
       };
+      ensureMapButtons();
       refreshMapMarkers();
     }).catch(function(e){
       console.warn('Yandex load failed', e);
@@ -701,12 +701,44 @@ function initMap(){
     });
     els.mapEl.addEventListener('pl:map-ready', function(){
       yandexReady=true;
+      ensureMapButtons();
       refreshMapMarkers();
     });
     setTimeout(function(){ if(!yandexReady){ showMapError(); } }, 5000);
     return;
   }
   showMapError();
+}
+function ensureMapButtons(){
+  // ensure left calendar/mode buttons visible and fullscreen works
+  setTimeout(function(){
+    const dateBtn=document.querySelector('.pl-map-date-btn');
+    const modeBtn=document.querySelector('.pl-map-mode-btn');
+    if(dateBtn) dateBtn.style.display='inline-flex';
+    if(modeBtn) modeBtn.style.display='inline-flex';
+    // add fullscreen button if not exists
+    let fsBtn=document.querySelector('.pl-map-fullscreen-btn');
+    let controls=document.querySelector('.pl-map-controls');
+    if(!controls){
+      controls=document.createElement('div');
+      controls.className='pl-map-controls';
+      els.mapEl.appendChild(controls);
+    }
+    if(!fsBtn){
+      fsBtn=document.createElement('button');
+      fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
+      fsBtn.title='На весь экран';
+      fsBtn.innerHTML='<i class="fa-solid fa-expand"></i>';
+      fsBtn.onclick=function(){
+        const wrap=document.getElementById('view-map');
+        const isFs=wrap.classList.toggle('is-fullscreen');
+        fsBtn.innerHTML=isFs?'<i class="fa-solid fa-compress"></i>':'<i class="fa-solid fa-expand"></i>';
+        try{ window.dispatchEvent(new Event('resize')); }catch(e){}
+        setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
+      };
+      controls.appendChild(fsBtn);
+    }
+  }, 300);
 }
 function showMapError(){
   if(els.mapEl && !els.mapEl.querySelector('.map-error')){
