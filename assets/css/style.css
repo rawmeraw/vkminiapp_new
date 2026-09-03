@@ -236,13 +236,14 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 #view-map.is-fullscreen{max-width:none !important;padding:0 !important}
 #view-map.is-fullscreen #map{position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;max-width:none !important;border-radius:0 !important;z-index:9998 !important}
 
-/* VK miniapp map — hide emotions/propose and "для вас" */
-.pl-map-emotions-toggle,
+/* VK miniapp map — hide only propose/composer, keep emotions visible + toggle */
 .pl-map-flower,
 .pl-map-flower-overlay,
-.pl-map-emotion,
 .pl-map-emotion-composer,
 .pl-map-emotion-overlay,
 .pl-map-propose-composer,
 .pl-map-propose-overlay{display:none !important}
 .pl-map-mode-dropdown__opt[data-mode="foryou"]{display:none !important}
+/* keep emotions markers and toggle visible */
+.pl-map-emotion{display:flex !important}
+.pl-map-emotions-toggle{display:flex !important}

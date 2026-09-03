@@ -2,6 +2,22 @@
 const API_BASE = 'https://permlive.ru';
 const bridge = window.vkBridge;
 try{ bridge && bridge.send('VKWebAppInit'); }catch(e){}
+// fix fetch for github.io -> permlive.ru for map-emotions (404 on rawmeraw.github.io/api/...)
+(function(){
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    try{
+      let url = typeof input==='string' ? input : input.url;
+      if(url && url.startsWith('/api/')) url = API_BASE + url;
+      else if(url && url.startsWith('api/')) url = API_BASE + '/' + url;
+      if(url !== (typeof input==='string' ? input : input.url)){
+        if(typeof input==='string') input = url;
+        else input = new Request(url, input);
+      }
+    }catch(e){}
+    return origFetch(input, init);
+  };
+})();
 
 const $ = s=>document.querySelector(s);
 const $$ = s=>[...document.querySelectorAll(s)];
@@ -710,20 +726,21 @@ function initMap(){
   showMapError();
 }
 function ensureMapButtons(){
-  // ensure left calendar/mode buttons visible and fullscreen works
   setTimeout(function(){
     const dateBtn=document.querySelector('.pl-map-date-btn');
     const modeBtn=document.querySelector('.pl-map-mode-btn');
     if(dateBtn) dateBtn.style.display='inline-flex';
     if(modeBtn) modeBtn.style.display='inline-flex';
-    // add fullscreen button if not exists
-    let fsBtn=document.querySelector('.pl-map-fullscreen-btn');
+    // fullscreen — один, первым в правом блоке, рабочий
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
+    // удалить дубли
+    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b,i){ if(i>0) b.remove(); });
+    let fsBtn=document.querySelector('.pl-map-fullscreen-btn');
     if(!fsBtn){
       fsBtn=document.createElement('button');
       fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
@@ -736,7 +753,17 @@ function ensureMapButtons(){
         try{ window.dispatchEvent(new Event('resize')); }catch(e){}
         setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
       };
-      controls.appendChild(fsBtn);
+      controls.prepend(fsBtn);
+    } else {
+      // сделать первой
+      controls.prepend(fsBtn);
+      if(!fsBtn.onclick) fsBtn.onclick=function(){
+        const wrap=document.getElementById('view-map');
+        const isFs=wrap.classList.toggle('is-fullscreen');
+        fsBtn.innerHTML=isFs?'<i class="fa-solid fa-compress"></i>':'<i class="fa-solid fa-expand"></i>';
+        try{ window.dispatchEvent(new Event('resize')); }catch(e){}
+        setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
+      };
     }
   }, 300);
 }
