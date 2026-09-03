@@ -27,17 +27,18 @@
   <link rel="stylesheet" href="./assets/css/maps.css">
 </head>
 <body>
-  <!-- Header -->
+  <!-- Header — без футера, навигация в хедере -->
   <header class="pl-header">
     <div class="pl-header__inner">
       <a class="pl-logo" href="https://permlive.ru/" target="_blank" rel="noopener">
         <img class="pl-logo__img" src="./assets/img/logo.png" alt="Живое!" width="28" height="28">
         <span class="pl-logo__text">Живое!</span>
       </a>
-      <div class="pl-header__search" id="header-search">
-        <i class="fas fa-search"></i>
-        <input id="search-input" type="search" placeholder="Искать среди концертов" autocomplete="off">
-      </div>
+      <nav class="pl-header-nav" aria-label="Навигация">
+        <a href="#" class="pl-header-link" data-nav="calendar"><i class="fa-solid fa-calendar"></i> Календарь</a>
+        <a href="#" class="pl-header-link" data-nav="map"><i class="fa-solid fa-map-location-dot"></i> Карта</a>
+        <a href="#" class="pl-header-link" data-nav="add"><i class="fa-solid fa-plus"></i> Добавить</a>
+      </nav>
     </div>
   </header>
 
@@ -55,6 +56,11 @@
           </div>
           <button class="calendar-arrow right hidden" aria-label="Вперёд"><i class="fas fa-chevron-right"></i></button>
         </div>
+      </div>
+      <!-- Поиск ниже календаря (раньше был в хедере) -->
+      <div class="pl-header__search" id="header-search" style="margin:12px 0">
+        <i class="fas fa-search"></i>
+        <input id="search-input" type="search" placeholder="Искать среди концертов" autocomplete="off">
       </div>
 
       <!-- Feed Sliders -->
@@ -110,6 +116,19 @@
       <div id="map" class="map"></div>
       <!-- Controls injected by JS -->
     </section>
+
+    <!-- ADD TAB -->
+    <section id="view-add" class="view">
+      <div class="add-page" style="max-width:600px;margin:0 auto;padding:24px 0">
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Добавить концерт</h2>
+        <p style="color:#666;margin-bottom:16px">Не нашел концерт в списке? Закинь ссылку, добавлю!</p>
+        <form id="add-form" style="display:flex;gap:8px">
+          <input id="add-link" type="url" placeholder="https://vk.com/wall... или https://..." required style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font-size:14px">
+          <button type="submit" class="pl-btn">Отправить</button>
+        </form>
+        <p id="add-status" style="margin-top:12px;color:#666;font-size:13px"></p>
+      </div>
+    </section>
   </main>
 
   <!-- Calendar modal (shared) -->
@@ -126,15 +145,7 @@
     <div id="sheet-content"></div>
   </div>
 
-  <!-- VK Tabbar -->
-  <nav class="pl-tabbar" role="tablist" aria-label="Навигация">
-    <button class="pl-tabbar__btn pl-tabbar__btn--active" data-tab="feed" role="tab" aria-selected="true">
-      <i class="fas fa-house"></i><span>Афиша</span>
-    </button>
-    <button class="pl-tabbar__btn" data-tab="map" role="tab" aria-selected="false">
-      <i class="fas fa-map-location-dot"></i><span>Карта</span>
-    </button>
-  </nav>
+
 
   <!-- Toast -->
   <div id="toast" class="pl-toast"></div>

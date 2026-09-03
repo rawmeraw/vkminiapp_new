@@ -23,9 +23,10 @@ const $ = s=>document.querySelector(s);
 const $$ = s=>[...document.querySelectorAll(s)];
 
 const els = {
-  tabBtns: $$('.pl-tabbar__btn'),
+  headerNav: $$('.pl-header-link'),
   viewFeed: $('#view-feed'),
   viewMap: $('#view-map'),
+  viewAdd: $('#view-add'),
   calendarInner: $('#calendar-dates-inner'),
   calOverlay: $('#cal-overlay'),
   calModal: $('#cal-modal'),
@@ -176,10 +177,34 @@ async function loadData(){
   state.concerts = pool.filter(c=>c.id && c.title && c.date);
   // sort future only for top10/upcoming
   if(!state.datesWithEvents.size) state.datesWithEvents=new Set(state.concerts.map(c=>c.date));
-  // precompute top10 pool sorted by rating
+  // precompute top10 — рейтинг важнее даты, как на сайте (?top10=1). is_paid прокси + cached_rating uncapped
   const future = state.concerts.filter(c=> c.date >= state.todayISO);
-  state.top10Pool = [...future].sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  state.top10Pool = [...future].sort((a,b)=>{
+    const paid = (Number(!!b.is_paid) - Number(!!a.is_paid));
+    if(paid!==0) return paid;
+    const r = parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0);
+    if(r!==0) return r;
+    return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
+  });
   state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  // точный порядок топ-10 как на сайте — подтянуть HTML ?top10=1 и переупорядочить
+  try{
+    const html = await fetch(`${API_BASE}/?top10=1`, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.ok?r.text():null).catch(()=>null);
+    if(html){
+      const order = [];
+      const re = /\/event\/([^\/\"']+)\//g;
+      let m; while((m=re.exec(html))!==null) order.push(m[1]);
+      if(order.length){
+        const bySlug = new Map(state.top10Pool.map(c=>[c.slug,c]));
+        const reordered = order.map(s=>bySlug.get(s)).filter(Boolean);
+        // добавить оставшиеся, сохраняя рейтинг-порядок
+        const remaining = state.top10Pool.filter(c=>!order.includes(c.slug));
+        state.top10Pool = [...reordered, ...remaining].slice(0,10);
+        // если HTML дал 10, используем его
+        if(reordered.length>=10) state.top10Pool = reordered.slice(0,10);
+      }
+    }
+  }catch(e){}
 }
 
 function normalizeApiConcert(c){
@@ -907,6 +932,16 @@ async function loadMapForDate(iso){
 }
 
 function switchTab(tab){
+  if(tab==='calendar'){
+    // календарь — скролл к календарю на главной
+    switchTab('feed');
+    setTimeout(function(){
+      const cal=document.getElementById('feed-calendar-wrap');
+      if(cal) cal.scrollIntoView({behavior:'smooth', block:'start'});
+      openCalendar();
+    }, 100);
+    return;
+  }
   state.tab=tab;
   document.body.classList.remove('map-fullscreen','pl-map-fs');
   document.documentElement.style.removeProperty('height');
@@ -914,12 +949,14 @@ function switchTab(tab){
   document.body.style.removeProperty('height');
   const calWrap=document.getElementById('feed-calendar-wrap');
   if(calWrap) calWrap.style.removeProperty('display');
-  // поиск только на главной
-  const hdrSearch=document.querySelector('.pl-header__search');
-  if(hdrSearch) hdrSearch.style.display = tab==='feed' ? 'flex' : 'none';
-  els.tabBtns.forEach(b=>{ const active=b.dataset.tab===tab; b.classList.toggle('pl-tabbar__btn--active', active); b.setAttribute('aria-selected', String(active)); });
+  // header active
+  $$('.pl-header-link').forEach(a=>{
+    const isActive = a.dataset.nav===tab || (tab==='feed' && a.dataset.nav==='calendar' && false);
+    a.classList.toggle('active', a.dataset.nav===tab);
+  });
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
+  if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
   if(tab==='map'){
     initMap();
     setTimeout(()=> { try{ state.map && state.map.invalidateSize && state.map.invalidateSize(); }catch(e){} }, 80);
@@ -930,7 +967,65 @@ function switchTab(tab){
 }
 
 function wire(){
-  els.tabBtns.forEach(b=> b.addEventListener('click',()=> switchTab(b.dataset.tab)));
+  // header nav
+  $$('.pl-header-link').forEach(a=>{
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      const nav=this.dataset.nav;
+      if(nav==='calendar') switchTab('calendar');
+      else switchTab(nav);
+    });
+  });
+  // add form
+  const addForm=document.getElementById('add-form');
+  if(addForm){
+    addForm.addEventListener('submit', async function(e){
+      e.preventDefault();
+      const inp=document.getElementById('add-link');
+      const status=document.getElementById('add-status');
+      let link=(inp.value||'').trim();
+      if(!link){ status.textContent='Вставь ссылку'; status.style.color='#e14425'; return; }
+      if(!link.includes('://')) link='https://'+link;
+      status.textContent='Отправляю...'; status.style.color='#666';
+      try{
+        // получить csrf
+        let csrf='';
+        try{
+          const g=await fetch(API_BASE+'/add/', {credentials:'include'});
+          const txt=await g.text();
+          const m=txt.match(/name=['"]csrfmiddlewaretoken['"] value=['"]([^'"]+)['"]/);
+          if(m) csrf=m[1];
+          const ck=document.cookie.match(/csrftoken=([^;]+)/);
+          if(ck) csrf=decodeURIComponent(ck[1]);
+        }catch(err){}
+        const fd=new FormData();
+        fd.append('link', link);
+        fd.append('hp_website','');
+        if(csrf) fd.append('csrfmiddlewaretoken', csrf);
+        const r=await fetch(API_BASE+'/add/', {
+          method:'POST',
+          body: fd,
+          credentials:'include',
+          headers: csrf ? {'X-CSRFToken': csrf, 'X-Requested-With':'XMLHttpRequest'} : {'X-Requested-With':'XMLHttpRequest'}
+        });
+        // add view redirects with ?result=added etc, but for github we check status
+        if(r.ok || r.redirected){
+          status.textContent='Спасибо! Ссылка отправлена, проверю и добавлю.';
+          status.style.color='#2f9e44';
+          inp.value='';
+        } else {
+          const t=await r.text();
+          if(t.includes('duplicate')){ status.textContent='Такая ссылка уже есть'; status.style.color='#e14425'; }
+          else { status.textContent='Отправлено'; status.style.color='#2f9e44'; inp.value=''; }
+        }
+      }catch(err){
+        // fallback — открыть в новой вкладке
+        window.open(API_BASE+'/add/', '_blank');
+        status.textContent='Открыл страницу добавления в новой вкладке';
+        status.style.color='#666';
+      }
+    });
+  }
   els.calOverlay.addEventListener('click', closeCalendar);
   els.sheetOverlay.addEventListener('click', closeSheet);
   $('.sheet__close')?.addEventListener('click', closeSheet);
@@ -975,10 +1070,6 @@ function wire(){
   const params=new URLSearchParams(location.search);
   const tab=params.get('tab')||params.get('vk_tab');
   if(tab==='map') switchTab('map');
+  else if(tab==='add') switchTab('add');
   try{ await bridge.send('VKWebAppGetLaunchParams'); }catch(e){}
-  // страховка: футер всегда виден в VK — форсировать display
-  setTimeout(function(){
-    const tb=document.querySelector('.pl-tabbar');
-    if(tb){ tb.style.display='flex'; tb.style.visibility='visible'; tb.style.opacity='1'; }
-  }, 500);
 })();
