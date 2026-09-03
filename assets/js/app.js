@@ -447,7 +447,7 @@ function cardHTML(c, opts={}){
 }
 
 function renderSliders(){
-  const hasDateFilter = !!state.range || (state.selectedDate && state.selectedDate!==state.todayISO) || state.query.trim()!=='' ;
+  const hasDateFilter = !!state.range || !!state.selectedDate || state.query.trim()!=='' ;
   const showTimeline = !!state.timelineMode;
   if(hasDateFilter && !showTimeline){
     let list=[];
