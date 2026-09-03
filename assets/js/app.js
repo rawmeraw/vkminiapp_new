@@ -727,18 +727,49 @@ function initMap(){
 }
 function ensureMapButtons(){
   setTimeout(function(){
-    const dateBtn=document.querySelector('.pl-map-date-btn');
-    const modeBtn=document.querySelector('.pl-map-mode-btn');
-    if(dateBtn) dateBtn.style.display='inline-flex';
-    if(modeBtn) modeBtn.style.display='inline-flex';
-    // fullscreen — один, первым в правом блоке, рабочий
+    // left calendar/mode — создать если нет (events-map inline не скопирован в vkminiapp)
+    let dateBtn=document.querySelector('.pl-map-date-btn');
+    if(!dateBtn){
+      dateBtn=document.createElement('button');
+      dateBtn.className='pl-map-date-btn';
+      dateBtn.innerHTML='<span class="pl-map-date-btn__text">Сегодня</span> <i class="fa-solid fa-calendar" style="font-size:11px"></i>';
+      dateBtn.onclick=openCalendar;
+      els.mapEl.appendChild(dateBtn);
+    }
+    dateBtn.style.display='inline-flex';
+    dateBtn.style.visibility='visible';
+    if(!dateBtn.onclick) dateBtn.onclick=openCalendar;
+    let modeBtn=document.querySelector('.pl-map-mode-btn');
+    if(!modeBtn){
+      modeBtn=document.createElement('button');
+      modeBtn.className='pl-map-date-btn pl-map-mode-btn';
+      modeBtn.style.top='56px';
+      modeBtn.innerHTML='<span>Все концерты</span> <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>';
+      els.mapEl.appendChild(modeBtn);
+      const dd=document.createElement('div');
+      dd.className='pl-map-mode-dropdown';
+      dd.innerHTML='<button class="pl-map-mode-dropdown__opt pl-map-mode-dropdown__opt--active" data-mode="all">Все концерты</button><button class="pl-map-mode-dropdown__opt" data-mode="free">Бесплатные</button>';
+      els.mapEl.appendChild(dd);
+      modeBtn.onclick=function(){ dd.classList.toggle('pl-map-mode-dropdown--open'); };
+      dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(b){
+        b.onclick=function(){
+          state.mapMode=b.dataset.mode;
+          dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(x){ x.classList.toggle('pl-map-mode-dropdown__opt--active', x===b); });
+          dd.classList.remove('pl-map-mode-dropdown--open');
+          modeBtn.querySelector('span').textContent=b.textContent;
+          refreshMapMarkers();
+        };
+      });
+    }
+    modeBtn.style.display='inline-flex';
+    modeBtn.style.visibility='visible';
+    // right controls — fullscreen один, ниже геопозиции (вторым)
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
-    // удалить дубли
     document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b,i){ if(i>0) b.remove(); });
     let fsBtn=document.querySelector('.pl-map-fullscreen-btn');
     if(!fsBtn){
@@ -753,19 +784,21 @@ function ensureMapButtons(){
         try{ window.dispatchEvent(new Event('resize')); }catch(e){}
         setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
       };
-      controls.prepend(fsBtn);
+      // ниже геопозиции — вторым в колонке
+      if(controls.children.length>0) controls.insertBefore(fsBtn, controls.children[1] || null);
+      else controls.appendChild(fsBtn);
     } else {
-      // сделать первой
-      controls.prepend(fsBtn);
-      if(!fsBtn.onclick) fsBtn.onclick=function(){
-        const wrap=document.getElementById('view-map');
-        const isFs=wrap.classList.toggle('is-fullscreen');
-        fsBtn.innerHTML=isFs?'<i class="fa-solid fa-compress"></i>':'<i class="fa-solid fa-expand"></i>';
-        try{ window.dispatchEvent(new Event('resize')); }catch(e){}
-        setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
-      };
+      if(controls.children.length>1) controls.insertBefore(fsBtn, controls.children[1]);
+      else controls.appendChild(fsBtn);
     }
   }, 300);
+  // повтор через 1с на случай позднего создания events-map контролов
+  setTimeout(function(){
+    const d=document.querySelector('.pl-map-date-btn');
+    const m=document.querySelector('.pl-map-mode-btn');
+    if(d) d.style.display='inline-flex';
+    if(m) m.style.display='inline-flex';
+  }, 1200);
 }
 function showMapError(){
   if(els.mapEl && !els.mapEl.querySelector('.map-error')){

@@ -232,7 +232,8 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 #view-map .pl-map-date-btn,
 #view-map .pl-map-mode-btn{z-index:10002 !important;display:inline-flex !important;visibility:visible !important;opacity:1 !important}
 #view-map .pl-map-mode-dropdown{z-index:10003 !important}
-.pl-map-controls{z-index:10003 !important}
+.pl-map-controls{z-index:10003 !important;right:12px !important;padding:4px !important;margin:-4px !important;width:auto !important}
+.pl-map-controls .pl-map-control-btn{margin:2px 0}
 #view-map.is-fullscreen{max-width:none !important;padding:0 !important}
 #view-map.is-fullscreen #map{position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;max-width:none !important;border-radius:0 !important;z-index:9998 !important}
 
