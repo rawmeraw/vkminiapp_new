@@ -1077,10 +1077,12 @@ function updateForyouOption(){
   const foryouOpt=dd.querySelector('[data-mode="foryou"]');
   if(!foryouOpt) return;
   // пункт «Для вас» виден всегда, когда у пользователя есть рекомендации, —
-  // иначе его не найти в день без рекомендаций на сегодня
+  // иначе его не найти в день без рекомендаций на сегодня.
+  // Важно: ставим явный 'flex', т.к. в CSS есть правило display:none,
+  // которое пустой инлайн-стиль не перебивает.
   const hasAny = state.hasForYou && state.forYouPool.length>0;
   console.log('[foryou] map option: hasForYou=', state.hasForYou, 'pool=', state.forYouPool.length, 'show=', hasAny);
-  foryouOpt.style.display = hasAny ? '' : 'none';
+  foryouOpt.style.display = hasAny ? 'flex' : 'none';
   if(!hasAny && state.mapMode==='foryou'){
     state.mapMode='all';
     const allOpt=dd.querySelector('[data-mode="all"]');
