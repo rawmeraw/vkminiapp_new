@@ -257,7 +257,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 @media (min-width: 768px){
   #view-map{max-width:1120px;margin:0 auto;padding:0 16px}
   #view-map #map{position:relative !important;top:auto !important;left:auto !important;width:100% !important;height:600px !important;border-radius:12px;overflow:visible;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-  #view-map #map > ymaps, #view-map #map > div{border-radius:12px;overflow:hidden}
+  #view-map #map > ymaps, #view-map #map > div:not([class*="pl-map-"]){border-radius:12px;overflow:hidden}
 }
 @media (max-width:767px){
   #view-map{padding:0}
