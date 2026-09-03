@@ -578,7 +578,7 @@ body.pl-map-fs #map {
     justify-content: center;
     width: 26px;
     height: 26px;
-    padding: 3px 0 1px;
+    padding: 2px 0 2px;
     border: 0;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.06);
@@ -1373,7 +1373,7 @@ body.pl-map-fs #map {
     font-size: 18px;
     line-height: 1;
     
-    padding: 3px 0 0;
+    padding: 2px 0 1px;
     color: #555;
     background: rgba(0, 0, 0, 0.06);
     box-shadow: none;

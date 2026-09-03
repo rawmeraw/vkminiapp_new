@@ -950,6 +950,23 @@ function wire(){
 }
 
 (async function boot(){
+  // VK insets — чтобы футер был прижат в VK WebView (иначе надо скроллить)
+  try{
+    const cfg = await bridge.send('VKWebAppGetConfig');
+    if(cfg && cfg.insets){
+      document.documentElement.style.setProperty('--vk-inset-top', (cfg.insets.top||0)+'px');
+      document.documentElement.style.setProperty('--vk-inset-bottom', (cfg.insets.bottom||0)+'px');
+    }
+    bridge.subscribe(function(e){
+      if(e.detail && e.detail.type==='VKWebAppUpdateConfig'){
+        const ins=e.detail.data && e.detail.data.insets;
+        if(ins){
+          document.documentElement.style.setProperty('--vk-inset-top', (ins.top||0)+'px');
+          document.documentElement.style.setProperty('--vk-inset-bottom', (ins.bottom||0)+'px');
+        }
+      }
+    });
+  }catch(e){}
   wire();
   renderCalendarStrip();
   await loadData();
@@ -959,4 +976,9 @@ function wire(){
   const tab=params.get('tab')||params.get('vk_tab');
   if(tab==='map') switchTab('map');
   try{ await bridge.send('VKWebAppGetLaunchParams'); }catch(e){}
+  // страховка: футер всегда виден в VK — форсировать display
+  setTimeout(function(){
+    const tb=document.querySelector('.pl-tabbar');
+    if(tb){ tb.style.display='flex'; tb.style.visibility='visible'; tb.style.opacity='1'; }
+  }, 500);
 })();
