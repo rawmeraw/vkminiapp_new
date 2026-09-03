@@ -130,7 +130,10 @@ const state = {
   forYouPool: [],
   vkUserId: null,
   vkName: '',
+  vkParams: null,
   hasForYou: false,
+  hasAccount: false,
+  likedIds: {},
   filtered: [],
   query: '',
   map: null,
@@ -204,48 +207,62 @@ async function loadData(){
     return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
   }).slice(0, 30);
   state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
-  // VK рекомендации — если пользователь привязан через allauth
+  // VK рекомендации — если пользователь привязан через allauth.
+  // LaunchParams берём первыми: в них vk_user_id + sign для подписи лайков.
   try{
-    let vkId=null, vkName='';
+    let vkId=null, vkName='', vkParams=null;
     const urlParams=new URLSearchParams(window.location.search);
     vkId=urlParams.get('vk_user_id') || urlParams.get('vk_user-id') || urlParams.get('uid');
     vkName=urlParams.get('vk_name')||'';
-    if(!vkId && window.vkBridge){
-      try{
-        const u=await bridge.send('VKWebAppGetUserInfo');
-        if(u && u.id){ vkId=String(u.id); vkName=[u.first_name, u.last_name].filter(Boolean).join(' '); }
-      }catch(err){}
-    }
-    if(!vkId){
+    if(window.vkBridge){
       try{
         const lp=await bridge.send('VKWebAppGetLaunchParams');
-        if(lp && lp.vk_user_id) vkId=String(lp.vk_user_id);
-        if(lp && !vkName && lp.vk_viewer_first_name) vkName=[lp.vk_viewer_first_name, lp.vk_viewer_last_name].filter(Boolean).join(' ');
+        if(lp && typeof lp==='object'){
+          vkParams=lp;
+          if(lp.vk_user_id) vkId=String(lp.vk_user_id);
+          if(!vkName && lp.vk_viewer_first_name) vkName=[lp.vk_viewer_first_name, lp.vk_viewer_last_name].filter(Boolean).join(' ');
+        }
       }catch(err){}
+      if(!vkId){
+        try{
+          const u=await bridge.send('VKWebAppGetUserInfo');
+          if(u && u.id){ vkId=String(u.id); vkName=[u.first_name, u.last_name].filter(Boolean).join(' '); }
+        }catch(err){}
+      }
     }
     if(vkId){
       state.vkUserId=vkId;
       state.vkName=vkName||'';
+      state.vkParams=vkParams;
       // без кэша: отрицательный результат не должен залипать
       const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`);
       console.log('[foryou] vkId=', vkId, 'rec=', rec && {has_user: rec.has_user, has_rec: rec.has_recommendations, count: rec.count});
+      state.hasAccount = !!(rec && rec.has_user);
+      if(rec && Array.isArray(rec.liked_ids)){
+        state.likedIds={};
+        for(const lid of rec.liked_ids) state.likedIds[lid]=true;
+      }
       if(rec && rec.has_user && rec.has_recommendations && Array.isArray(rec.results) && rec.results.length){
         const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
         // добавляем рекомендации в общий пул, чтобы карточки/карта их видели
         for (const c of list) {
           if (!seen.has(c.slug)) { seen.add(c.slug); state.concerts.push(c); }
         }
-        state.forYouPool=list;
+        state.foryouPool=list;
         state.hasForYou=true;
         console.log('[foryou] pool=', list.map(c=>c.slug));
       } else {
-        state.forYouPool=[]; state.hasForYou=false;
+        state.foryouPool=[]; state.hasForYou=false;
       }
     } else if(vkName){
       state.vkName=vkName;
       console.log('[foryou] no vkId, skip');
     }
+    // сердечки балунов карты — только при привязанном аккаунте
+    try{ document.body.classList.toggle('vk-no-account', !state.hasAccount); }catch(e){}
   }catch(e){ console.warn('vk rec failed',e); }
+  // если карта уже открыта — перерисовать маркеры с новыми данными
+  try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
 }
 
 function normalizeApiConcert(c){
@@ -548,8 +565,12 @@ function cardHTML(c, opts={}){
   } else {
     dateText = fmtShortDate(dObj);
   }
-  return `<a class="concert-card" href="${href}" target="_blank" rel="noopener" data-slug="${esc(slug)}" style="--card-bg-color:${esc(bg)}">
-    <div class="card-img-wrapper">${img}${rank}${ratingBadge}</div>
+  // сердечко — только если у пользователя привязан аккаунт
+  const heart = state.hasAccount
+    ? `<span class="card-like${state.likedIds[c.id]?' liked':''}" data-id="${c.id}" role="button" aria-label="Лайк"><i class="fa-solid fa-heart"></i></span>`
+    : '';
+  return `<a class="concert-card" href="${href}" target="_blank" rel="noopener" data-slug="${esc(slug)}" data-id="${c.id}" style="--card-bg-color:${esc(bg)}">
+    <div class="card-img-wrapper">${img}${rank}${ratingBadge}${heart}</div>
     <div class="card-info">
       <h3 class="card-title">${esc(c.title)}</h3>
       <div class="card-meta">${esc(dateText)} › ${venue}${priceTag? ' · '+priceTag:''}</div>
@@ -786,13 +807,19 @@ function openTimeline(type){
 // Sheet
 function openSheet(c){
   const slug=c.slug||extractSlug(c.url||'');
+  const sheetHeart = state.hasAccount
+    ? `<button class="card-like sheet-like${state.likedIds[c.id]?' liked':''}" data-id="${c.id}" aria-label="Лайк" style="position:static;width:40px;height:40px;flex:none"><i class="fa-solid fa-heart" style="font-size:18px"></i></button>`
+    : '';
   els.sheetContent.innerHTML=`
     ${c.main_image? `<img class="sheet__img" src="${esc(c.main_image)}" alt="">`:''}
-    <h3 class="sheet__title">${esc(c.title)}</h3>
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-top:12px">
+      <h3 class="sheet__title" style="flex:1;margin:0">${esc(c.title)}</h3>
+      ${sheetHeart}
+    </div>
     <div class="sheet__meta"><i class="fas fa-calendar"></i> ${esc(fmtDay(parseISO(c.date)))} в ${esc(c.time||'')} · <i class="fas fa-location-dot"></i> ${esc(c.place_name||c.place?.name||'')} ${c.place?.address? '· '+esc(c.place.address):''}</div>
     ${c.tags?.length? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${c.tags.map(t=> `<span class="tag" style="background:#f0f0f0">${esc(t.name)}</span>`).join('')}</div>`:''}
     <p class="sheet__desc">${esc(c.description||'Подробности на permlive.ru')}</p>
-    <div style="display:flex;gap:8px;margin-top:6px;color:#a97c00;font-weight:600">${c.price===0? 'Вход свободный' : c.price? `от ${c.price}₽` : ''} ${c.is_paid? '· <span style="color:#e14425">★ Топ</span>':''}</div>
+    <div style="display:flex;gap:8px;margin-top:6px;color:#a97c00;font-weight:600">${c.price===0? 'Вход свободный' : c.price? `от ${c.price}₽` : ''} ${c.is_paid? '· <span style="color:#e14425">★ Топ</span>':''} <span id="sheet-rating" style="color:#222"><i class="fa-solid fa-star" style="color:#ffc107"></i> ${esc(c.display_rating||c.cached_rating||'')}</span></div>
     <div class="sheet__actions">
       <a class="pl-btn" href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener"><i class="fas fa-external-link"></i> Открыть на сайте</a>
       <button class="pl-btn pl-btn--secondary" id="sheet-map-btn"><i class="fas fa-map"></i> Показать на карте</button>
@@ -807,6 +834,60 @@ function openSheet(c){
   };
 }
 function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverlay.classList.remove('sheet-overlay--show'); }
+
+// Лайк без перезагрузки: обновляем сердечко и рейтинг прямо в DOM
+async function toggleLike(concertId, btn){
+  concertId = Number(concertId);
+  if(!concertId || !state.vkUserId) return;
+  if(btn){ btn.style.pointerEvents='none'; }
+  try{
+    const r = await fetch(API_BASE+'/api/vk/like/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+      body: JSON.stringify({vk_user_id: state.vkUserId, concert_id: concertId, vk_params: state.vkParams||undefined})
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.success){
+      toast((j && j.error==='Аккаунт не привязан') ? 'Войдите на сайте, чтобы ставить лайки' : 'Не удалось поставить лайк');
+      return;
+    }
+    if(j.liked) state.likedIds[concertId]=true; else delete state.likedIds[concertId];
+    // обновляем состояние в пулах, чтобы перерендер не сбрасывал
+    for(const pool of [state.concerts, state.top10Pool, state.upcomingPool, state.forYouPool]){
+      for(const c of pool){
+        if(Number(c.id)===concertId){ c.display_rating=j.rating; c.cached_rating=j.rating; }
+      }
+    }
+    // обновляем все сердечки этого концерта на странице (карточки, попап, балуны карты)
+    document.querySelectorAll(`.card-like[data-id="${concertId}"], .sheet-like[data-id="${concertId}"]`).forEach(function(b){
+      b.classList.toggle('liked', !!j.liked);
+      b.style.pointerEvents='';
+    });
+    document.querySelectorAll(`.pl-map-balloon__like[data-like-id="${concertId}"]`).forEach(function(b){
+      b.classList.toggle('is_liked', !!j.liked);
+      const icon=b.querySelector('i');
+      if(icon) icon.className=(j.liked?'fas':'far')+' fa-heart';
+      b.style.pointerEvents='';
+    });
+    // обновляем бейдж рейтинга в тех же карточках
+    document.querySelectorAll(`.concert-card[data-id="${concertId}"]`).forEach(function(card){
+      const badge = card.querySelector('.card-rating-badge, .card-rating');
+      if(badge){
+        badge.innerHTML = `<i class="fa-solid fa-star"></i> ${esc(j.rating)}`;
+        if(badge.classList.contains('card-rating-badge')) badge.classList.toggle('featured', parseFloat(j.rating)>=5);
+      }
+    });
+    // и в открытом попапе
+    const sheetHeart = document.querySelector(`#event-sheet .sheet-like[data-id="${concertId}"]`);
+    if(sheetHeart) sheetHeart.classList.toggle('liked', !!j.liked);
+    const sheetRating = document.getElementById('sheet-rating');
+    if(sheetRating) sheetRating.innerHTML = `<i class="fa-solid fa-star"></i> ${esc(j.rating)}`;
+  }catch(e){
+    toast('Нет соединения, попробуйте позже');
+  }finally{
+    if(btn){ btn.style.pointerEvents=''; }
+  }
+}
 
 // Maps — Yandex only (как на /map/, без Leaflet мока)
 let yandexReady=false;
@@ -1273,6 +1354,25 @@ function wire(){
     applyFilter();
   });
   els.calendarInner.addEventListener('dblclick', openCalendar);
+  // лайки: делегированный клик по сердечкам (карточки — ссылки, переход отменяем)
+  document.addEventListener('click', function(e){
+    const heart = e.target && e.target.closest ? e.target.closest('.card-like[data-id], .sheet-like[data-id]') : null;
+    if(!heart) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleLike(heart.getAttribute('data-id'), heart);
+  });
+  // лайки в балунах Яндекс-карты: перехватываем в capture-фазе раньше site-обработчика
+  // (site шлёт POST на same-origin /like/ — с github.io он не сработает)
+  document.addEventListener('click', function(e){
+    let blike=null;
+    try{ blike = e.target && e.target.closest ? e.target.closest('.pl-map-balloon__like[data-like-id]') : null; }catch(err){}
+    if(!blike) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(!state.hasAccount) return;
+    toggleLike(blike.getAttribute('data-like-id'), blike);
+  }, true);
   // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
   document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); }});
   window.addEventListener('popstate', e=>{
