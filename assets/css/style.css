@@ -55,12 +55,12 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .calendar-dates{flex:1;overflow:hidden;position:relative;min-width:0}
 .calendar-dates-inner{display:flex;gap:6px;padding:6px 2px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;width:100%;max-width:100%;box-sizing:border-box;-webkit-overflow-scrolling:touch;min-width:0}
 .calendar-dates-inner::-webkit-scrollbar{display:none}
-.calendar-date{flex:0 0 52px;width:52px;height:58px;border-radius:12px;background:#f8f8f8;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;-webkit-appearance:none;appearance:none;color:#222;-webkit-text-fill-color:#222}
+.calendar-date{flex:0 0 46px;width:46px;height:52px;border-radius:10px;background:#f8f8f8;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;-webkit-appearance:none;appearance:none;color:#222;-webkit-text-fill-color:#222}
 .calendar-date.selected{background:var(--dark);color:#fff !important;-webkit-text-fill-color:#fff !important;border-color:var(--dark)}
 .calendar-date.has-events{box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
 .calendar-date.selected.has-events{box-shadow:none}
-.calendar-date__day{font-size:18px;font-weight:700;line-height:1;color:inherit;-webkit-text-fill-color:inherit}
-.calendar-date__wd{font-size:10px;text-transform:uppercase;letter-spacing:.5px;opacity:.6;margin-top:2px;color:#666;-webkit-text-fill-color:#666}
+.calendar-date__day{font-size:16px;font-weight:700;line-height:1;color:inherit;-webkit-text-fill-color:inherit}
+.calendar-date__wd{font-size:9px;text-transform:uppercase;letter-spacing:.5px;opacity:.6;margin-top:2px;color:#666;-webkit-text-fill-color:#666}
 .calendar-date--weekend .calendar-date__wd{color:var(--red) !important;-webkit-text-fill-color:var(--red) !important}
 .calendar-date.selected .calendar-date__wd{color:rgba(255,255,255,.7) !important;-webkit-text-fill-color:rgba(255,255,255,.7) !important}
 .calendar-date--empty{color:#999 !important;-webkit-text-fill-color:#999 !important}

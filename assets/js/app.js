@@ -233,21 +233,30 @@ function normalizeApiEvent(e){
   };
 }
 
-// Calendar strip — 60 days (2 months) from today, inactive if no concerts, month label
+// Calendar strip — month label показывает только текущий видимый месяц (как на сайте)
 function updateMonthLabel(){
   const lbl=document.getElementById('calendar-month-label');
   if(!lbl) return;
+  // найти первый видимый день в ленте
+  const inner=els.calendarInner;
+  if(inner && inner.children.length){
+    const rect=inner.getBoundingClientRect();
+    for(const el of inner.children){
+      const r=el.getBoundingClientRect();
+      if(r.right > rect.left + 10 && r.left < rect.right){
+        const iso=el.dataset.date;
+        if(iso){
+          const d=parseISO(iso);
+          const m=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][d.getMonth()];
+          lbl.textContent=m.charAt(0).toUpperCase()+m.slice(1)+' '+d.getFullYear();
+          return;
+        }
+      }
+    }
+  }
   const today=parseISO(state.todayISO);
-  const monthsNom=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-  // show month of today + next if spans two months
-  const end=new Date(today); end.setDate(end.getDate()+59);
-  const m1=monthsNom[today.getMonth()], m2=monthsNom[end.getMonth()];
-  const y1=today.getFullYear(), y2=end.getFullYear();
-  let txt=m1.charAt(0).toUpperCase()+m1.slice(1);
-  if(m1!==m2) txt+=` — ${m2.charAt(0).toUpperCase()+m2.slice(1)}`;
-  if(y1!==y2) txt+=` ${y1} — ${y2}`;
-  else txt+=` ${y1}`;
-  lbl.textContent=txt;
+  const m=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][today.getMonth()];
+  lbl.textContent=m.charAt(0).toUpperCase()+m.slice(1)+' '+today.getFullYear();
 }
 function renderCalendarStrip(){
   const inner=els.calendarInner;
@@ -317,8 +326,19 @@ function updateArrowVisibility(){
   const left=$('#feed-calendar .calendar-arrow.left');
   const right=$('#feed-calendar .calendar-arrow.right');
   if(!left||!right) return;
-  function upd(){ left.classList.toggle('hidden', inner.scrollLeft<=4); right.classList.toggle('hidden', inner.scrollLeft+inner.clientWidth >= inner.scrollWidth-4); }
+  function upd(){
+    left.classList.toggle('hidden', inner.scrollLeft<=4);
+    right.classList.toggle('hidden', inner.scrollLeft+inner.clientWidth >= inner.scrollWidth-4);
+    updateMonthLabel();
+  }
   inner.addEventListener('scroll', upd);
+  // также обновлять месяц при скролле
+  let tick=false;
+  inner.addEventListener('scroll', function(){
+    if(tick) return;
+    tick=true;
+    requestAnimationFrame(function(){ updateMonthLabel(); tick=false; });
+  }, {passive:true});
   upd();
   left.onclick=()=> inner.scrollBy({left:-240,behavior:'smooth'});
   right.onclick=()=> inner.scrollBy({left:240,behavior:'smooth'});
@@ -1094,7 +1114,6 @@ function wire(){
 }
 
 (async function boot(){
-  // VK insets — чтобы футер был прижат в VK WebView (иначе надо скроллить)
   try{
     const cfg = await bridge.send('VKWebAppGetConfig');
     if(cfg && cfg.insets){
@@ -1112,6 +1131,8 @@ function wire(){
     });
   }catch(e){}
   wire();
+  // календарь в хедере сразу красный (feed активен)
+  switchTab('feed');
   renderCalendarStrip();
   await loadData();
   renderCalendarStrip();
@@ -1120,5 +1141,20 @@ function wire(){
   const tab=params.get('tab')||params.get('vk_tab');
   if(tab==='map') switchTab('map');
   else if(tab==='add') switchTab('add');
+  else {
+    // уже на feed, но header active нужно обновить после load
+    $$('.pl-header-link').forEach(a=>{
+      const isActive = a.dataset.nav==='calendar';
+      a.classList.toggle('active', isActive);
+    });
+  }
   try{ await bridge.send('VKWebAppGetLaunchParams'); }catch(e){}
+  // глобальный catch для TLS ошибок — не роняем приложение
+  window.addEventListener('unhandledrejection', function(e){
+    console.warn('unhandled', e.reason);
+    if(String(e.reason).includes('Cannot connect to API') || String(e.reason).includes('socket disconnected')){
+      toast('Нет соединения с сервером, показаны сохранённые данные');
+      e.preventDefault();
+    }
+  });
 })();
