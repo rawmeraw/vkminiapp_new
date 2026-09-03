@@ -162,55 +162,48 @@ function cachedFetch(key, url, ttlMs){
 }
 
 async function loadData(){
-  const cal = await cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 5*60*1000);
-  if(cal && Array.isArray(cal.dates)){
-    state.datesWithEvents=new Set(cal.dates);
-    if(cal.today) state.todayISO=cal.today;
+  // календарь + концерты параллельно, маленькими порциями для скорости
+  const [calRes, byDateRes, byRatingRes] = await Promise.allSettled([
+    cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 60*60*1000),
+    cachedFetch('pl_concerts_date_'+state.todayISO, `${API_BASE}/api/concerts/?limit=120`, 5*60*1000),
+    cachedFetch('pl_concerts_top_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30&order=rating`, 5*60*1000),
+  ]).then(rs => rs.map(r => r.status === 'fulfilled' ? r.value : null));
+  if(calRes && Array.isArray(calRes.dates)){
+    state.datesWithEvents = new Set(calRes.dates);
+    if(calRes.today) state.todayISO = calRes.today;
   }
-  // we show only 20 images but top10 needs correct ordering across future — fetch 80 for correct rock saturday order
-  let pool = [];
-  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=80`, 5*60*1000);
-  if(api){
-    const results = Array.isArray(api.results)?api.results: Array.isArray(api)?api: [];
-    pool = results.map(normalizeApiConcert).filter(c=>c.slug && c.date);
+  const toList = (api) => {
+    const results = api && Array.isArray(api.results) ? api.results : (Array.isArray(api) ? api : []);
+    return results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title);
+  };
+  const byDate = toList(byDateRes);
+  const byRating = toList(byRatingRes);
+  // объединяем без дублей: сначала по дате (для upcoming/календаря), затем топ по рейтингу
+  const seen = new Set();
+  const pool = [];
+  for (const c of [...byDate, ...byRating]) {
+    if (!seen.has(c.slug)) { seen.add(c.slug); pool.push(c); }
   }
-  if(!pool.length){
-    // fallback to map events for splicing dates
+  if (!pool.length) {
     const todayEvents = await fetchJSON(`${API_BASE}/map/events/?date=${state.todayISO}`);
-    if(todayEvents && Array.isArray(todayEvents.events)){
-      pool = todayEvents.events.map(normalizeApiEvent).filter(c=>c.slug);
+    if (todayEvents && Array.isArray(todayEvents.events)) {
+      for (const c of todayEvents.events.map(normalizeApiEvent).filter(c => c.slug)) {
+        if (!seen.has(c.slug)) { seen.add(c.slug); pool.push(c); }
+      }
     }
   }
-  // filter out broken
-  state.concerts = pool.filter(c=>c.id && c.title && c.date);
-  // sort future only for top10/upcoming
-  if(!state.datesWithEvents.size) state.datesWithEvents=new Set(state.concerts.map(c=>c.date));
-  // precompute top10 — рейтинг важнее даты, как на сайте (?top10=1). is_paid прокси + cached_rating uncapped
-  const future = state.concerts.filter(c=> c.date >= state.todayISO);
+  state.concerts = pool;
+  if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.map(c => c.date));
+  const future = state.concerts.filter(c => c.date >= state.todayISO);
+  // топ-10 как на сайте: сначала is_paid, затем uncapped cached_rating, затем дата
   state.top10Pool = [...future].sort((a,b)=>{
     const paid = (Number(!!b.is_paid) - Number(!!a.is_paid));
     if(paid!==0) return paid;
     const r = parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0);
     if(r!==0) return r;
     return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
-  });
+  }).slice(0, 30);
   state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
-  // точный порядок топ-10 как на сайте — подтянуть HTML ?top10=1 и переупорядочить
-  try{
-    const html = await fetch(`${API_BASE}/?top10=1`, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.ok?r.text():null).catch(()=>null);
-    if(html){
-      const order = [];
-      const re = /\/event\/([^\/\"']+)\//g;
-      let m; while((m=re.exec(html))!==null) order.push(m[1]);
-      if(order.length){
-        const bySlug = new Map(state.top10Pool.map(c=>[c.slug,c]));
-        const reordered = order.map(s=>bySlug.get(s)).filter(Boolean);
-        const remaining = state.top10Pool.filter(c=>!order.includes(c.slug));
-        state.top10Pool = [...reordered, ...remaining].slice(0,10);
-        if(reordered.length>=10) state.top10Pool = reordered.slice(0,10);
-      }
-    }
-  }catch(e){}
   // VK рекомендации — если пользователь привязан через allauth
   try{
     let vkId=null, vkName='';
@@ -236,6 +229,10 @@ async function loadData(){
       const rec=await cachedFetch('vk_rec_'+vkId, `${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`, 5*60*1000);
       if(rec && rec.has_user && rec.has_recommendations && Array.isArray(rec.results) && rec.results.length){
         const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
+        // добавляем рекомендации в общий пул, чтобы карточки/карта их видели
+        for (const c of list) {
+          if (!seen.has(c.slug)) { seen.add(c.slug); state.concerts.push(c); }
+        }
         state.foryouPool=list;
         state.hasForYou=true;
       }
@@ -713,6 +710,7 @@ function renderTimeline(){
 
 function getTimelineTitle(){
   if(state.timelineMode==='top10') return 'Топ-10';
+  if(state.timelineMode==='foryou') return 'Рекомендации для вас';
   if(state.timelineMode==='upcoming') return 'Ближайшие события';
   if(state.timelineMode==='date') return fmtHeaderDate(parseISO(state.selectedDate));
   if(state.timelineMode==='range') return `${fmtDateShort(state.range.start)} — ${fmtDateShort(state.range.end)}`;
@@ -728,6 +726,8 @@ function applyFilter(){
     state.timelineMode='search';
   } else if(state.timelineMode==='top10'){
     list = [...state.top10Pool].slice(0,80);
+  } else if(state.timelineMode==='foryou'){
+    list = [...state.forYouPool].slice(0,80);
   } else if(state.timelineMode==='upcoming'){
     list = [...state.upcomingPool].slice(0,80);
   } else if(state.timelineMode==='date'){
@@ -1012,6 +1012,10 @@ function refreshMapMarkers(){
   else listY=state.concerts.filter(c=> c.date===state.todayISO);
   if(state.mapMode==='free') listY=listY.filter(c=> c.price===0);
   if(state.mapMode==='paid') listY=listY.filter(c=> c.is_paid);
+  if(state.mapMode==='foryou'){
+    const fy = new Set(state.forYouPool.map(c=>c.slug));
+    listY=listY.filter(c=> fy.has(c.slug));
+  }
   if(window.PermLiveMaps && typeof window.PermLiveMaps.setEvents==='function'){
     try{
       const evts=listY.map(c=>{
@@ -1031,11 +1035,10 @@ function refreshMapMarkers(){
       window.PermLiveMapData.defaultDate=state.selectedDate||state.todayISO;
       window.PermLiveMapData.emotionDate=state.todayISO;
       window.__PermLiveMapCurrentDate = state.selectedDate||state.todayISO;
-      if(yandexReady) window.PermLiveMaps.setEvents(evts, {recenter:true});
-      else {
-        // if map not ready yet, store for later
-        window.PermLiveMapData.events=evts;
-      }
+      // всегда вызываем setEvents — site кладёт events в state даже если карта ещё не готова,
+      // иначе фильтр по дате применяется только после второго переключения
+      try { window.PermLiveMaps.setEvents(evts, {recenter:true}); }
+      catch(e){ console.warn('PermLiveMaps setEvents failed', e); }
       const mapDateBtn=document.querySelector('.pl-map-date-btn__text');
       if(mapDateBtn){
         const txt = state.selectedDate ? fmtHeaderDate(parseISO(state.selectedDate)) : 'Сегодня';
@@ -1092,8 +1095,14 @@ function switchTab(tab){
   if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
   if(tab==='map'){
     initMap();
-    setTimeout(()=> { try{ state.map && state.map.invalidateSize && state.map.invalidateSize(); }catch(e){} }, 80);
-    refreshMapMarkers();
+    // карта была display:none — дать ей размер и перерисовать дважды
+    const redo = () => {
+      try{ state.map && state.map.invalidateSize && state.map.invalidateSize(); }catch(e){}
+      try{ window.dispatchEvent(new Event('resize')); }catch(e){}
+      refreshMapMarkers();
+    };
+    setTimeout(redo, 80);
+    setTimeout(redo, 350);
     try{ bridge && bridge.send('VKWebAppSetViewSettings',{status_bar_style:'light', action_bar_color:'#ffffff'});}catch(e){}
   }
   window.scrollTo({top:0,behavior:'smooth'});
