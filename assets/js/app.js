@@ -226,7 +226,9 @@ async function loadData(){
     if(vkId){
       state.vkUserId=vkId;
       state.vkName=vkName||'';
-      const rec=await cachedFetch('vk_rec_'+vkId, `${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`, 5*60*1000);
+      // без кэша: отрицательный результат не должен залипать
+      const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`);
+      console.log('[foryou] vkId=', vkId, 'rec=', rec && {has_user: rec.has_user, has_rec: rec.has_recommendations, count: rec.count});
       if(rec && rec.has_user && rec.has_recommendations && Array.isArray(rec.results) && rec.results.length){
         const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
         // добавляем рекомендации в общий пул, чтобы карточки/карта их видели
@@ -235,9 +237,13 @@ async function loadData(){
         }
         state.foryouPool=list;
         state.hasForYou=true;
+        console.log('[foryou] pool=', list.map(c=>c.slug));
+      } else {
+        state.foryouPool=[]; state.hasForYou=false;
       }
     } else if(vkName){
       state.vkName=vkName;
+      console.log('[foryou] no vkId, skip');
     }
   }catch(e){ console.warn('vk rec failed',e); }
 }
@@ -859,29 +865,7 @@ function ensureMapButtons(){
     }
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
-    // показать Для вас только если есть рекомендации на выбранный день
-    (function(){
-      const dd=document.querySelector('.pl-map-mode-dropdown');
-      if(!dd) return;
-      const foryouOpt=dd.querySelector('[data-mode="foryou"]');
-      if(!foryouOpt) return;
-      let hasForDay=false;
-      if(state.hasForYou && state.forYouPool.length){
-        if(state.selectedDate) hasForDay=state.forYouPool.some(function(c){ return c.date===state.selectedDate; });
-        else if(state.range) hasForDay=state.forYouPool.some(function(c){ return c.date>=state.range.start && c.date<=state.range.end; });
-        else hasForDay=state.forYouPool.some(function(c){ return c.date===state.todayISO; });
-        // если на выбранный день нет, но есть вообще — показать всё равно? по ТЗ только если есть на день
-      }
-      foryouOpt.style.display = hasForDay ? '' : 'none';
-      if(!hasForDay && state.mapMode==='foryou'){
-        state.mapMode='all';
-        const allOpt=dd.querySelector('[data-mode="all"]');
-        if(allOpt){
-          dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(x){ x.classList.toggle('pl-map-mode-dropdown__opt--active', x===allOpt); });
-          modeBtn.querySelector('span').textContent=allOpt.textContent;
-        }
-      }
-    })();
+    updateForyouOption();
     // right controls — один рабочий fullscreen ниже геопозиции, зум в том же столбце, посвободнее
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
@@ -995,6 +979,28 @@ function addCommonControls(){
   });
 }
 
+function updateForyouOption(){
+  const dd=document.querySelector('.pl-map-mode-dropdown');
+  if(!dd) return;
+  const foryouOpt=dd.querySelector('[data-mode="foryou"]');
+  if(!foryouOpt) return;
+  let hasForDay=false;
+  if(state.hasForYou && state.forYouPool.length){
+    if(state.range) hasForDay=state.forYouPool.some(function(c){ return c.date>=state.range.start && c.date<=state.range.end; });
+    else if(state.selectedDate) hasForDay=state.forYouPool.some(function(c){ return c.date===state.selectedDate; });
+    else hasForDay=state.forYouPool.some(function(c){ return c.date===state.todayISO; });
+  }
+  foryouOpt.style.display = hasForDay ? '' : 'none';
+  if(!hasForDay && state.mapMode==='foryou'){
+    state.mapMode='all';
+    const allOpt=dd.querySelector('[data-mode="all"]');
+    const modeBtn=document.querySelector('.pl-map-mode-btn');
+    if(allOpt){
+      dd.querySelectorAll('.pl-map-mode-dropdown__opt').forEach(function(x){ x.classList.toggle('pl-map-mode-dropdown__opt--active', x===allOpt); });
+      if(modeBtn && modeBtn.querySelector('span')) modeBtn.querySelector('span').textContent=allOpt.textContent;
+    }
+  }
+}
 function updateMapFiltersBlack(){
   const dBtn=document.querySelector('.pl-map-date-btn');
   const mBtn=document.querySelector('.pl-map-mode-btn');
@@ -1002,6 +1008,7 @@ function updateMapFiltersBlack(){
   const isModeFiltered = state.mapMode!=='all';
   if(dBtn) dBtn.classList.toggle('pl-map-date-btn--filtered', isDateFiltered);
   if(mBtn) mBtn.classList.toggle('pl-map-mode-btn--filtered', isModeFiltered);
+  updateForyouOption();
 }
 function refreshMapMarkers(){
   updateMapFiltersBlack();
