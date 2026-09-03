@@ -281,14 +281,12 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 /* VK miniapp: лайки балунов работают через наш API (перехват клика);
    без привязанного аккаунта сердечки прячем везде */
 body.vk-no-account .pl-map-balloon__like{display:none !important}
-/* VK miniapp map — hide only propose/composer, keep emotions visible + toggle */
-.pl-map-flower,
-.pl-map-flower-overlay,
-.pl-map-emotion-composer,
-.pl-map-emotion-overlay,
-.pl-map-propose-composer,
-.pl-map-propose-overlay{display:none !important}
-.pl-map-mode-dropdown__opt[data-mode="foryou"]{display:none}
+/* цветок/композеры видны (раньше прятали до готовности VK-эндпоинтов);
+   видимостью пункта «Для вас» управляет JS через инлайн-стиль */
+.pl-header-link{font-family:'Jost',Arial,sans-serif}
+.pl-tabbar__btn{font-family:'Jost',Arial,sans-serif}
+/* в минике нет /add/ — ссылка «полная форма» из композера propose ведёт в никуда */
+.pl-map-propose-composer .pl-map-propose-composer__hint a{display:none}
 /* keep emotions markers and toggle visible */
 .pl-map-emotion{display:flex !important}
 .pl-map-emotions-toggle{display:flex !important}

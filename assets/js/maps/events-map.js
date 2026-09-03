@@ -1486,7 +1486,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function showFlower(ll, clientX, clientY) {
-        try{ console.log('[flower] showFlower ll=', JSON.stringify(ll), 'mapEl=', !!state.mapEl); }catch(_){}
         if (!state.mapEl || !ll) return;
         buildFlower();
         state.flowerAnchor = ll.slice();
@@ -2223,9 +2222,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
         state.mapEl.addEventListener('pointerdown', function (e) {
             if (e.button !== undefined && e.button !== 0 && e.button !== -1) return;
-            var ui = isMapUI(e);
-            try{ console.log('[flower] pointerdown ui=', ui, 'x=', e.clientX, 'y=', e.clientY); }catch(_){}
-            if (ui) { clearFlowerTap(); return; }
+            if (isMapUI(e)) { clearFlowerTap(); return; }
             flowerTap = [e.clientX, e.clientY, Date.now()];
         }, true);
         state.mapEl.addEventListener('pointermove', function (e) {
@@ -2341,14 +2338,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 return;
             }
 
-            try{ console.log('[flower] click target=', target && target.className, 'flowerTap=', !!flowerTap, 'was=', [wasBalloon, wasEmotionPop, wasFlower, wasPropose, wasComposer].join(',')); }catch(_){}
             if (!flowerTap) return;
             var tapDx = e.clientX - flowerTap[0], tapDy = e.clientY - flowerTap[1];
             if (tapDx * tapDx + tapDy * tapDy > 144) { clearFlowerTap(); return; }
             clearFlowerTap();
 
             var ll = screenToLngLat(e.clientX, e.clientY);
-            try{ console.log('[flower] ll=', JSON.stringify(ll)); }catch(_){}
             if (ll) {
                 e.preventDefault();
                 e.stopPropagation();
