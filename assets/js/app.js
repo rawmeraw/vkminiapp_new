@@ -238,6 +238,23 @@ async function loadData(){
       const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`);
       console.log('[foryou] vkId=', vkId, 'rec=', rec && {has_user: rec.has_user, has_rec: rec.has_recommendations, count: rec.count});
       state.hasAccount = !!(rec && rec.has_user);
+      // для привязанных — реальное имя и аватар из VK для эмоций на карте.
+      // ME в коде карты — ссылка на этот же объект, мутируем поля, не заменяем.
+      if(state.hasAccount && window.vkBridge){
+        try{
+          const u=await bridge.send('VKWebAppGetUserInfo');
+          if(u && u.id){
+            const fn=(u.first_name||'').trim(), ln=(u.last_name||'').trim();
+            state.vkName=[fn, ln].filter(Boolean).join(' ')||state.vkName;
+            state.vkShortName= fn ? (ln ? `${fn} ${ln.charAt(0)}.` : fn) : state.vkName;
+            state.vkAvatar=u.photo_100||u.photo_200||'';
+            if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
+              Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
+            }
+            window.PermLiveMapVk={vk_user_id: String(u.id), vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||'', vk_avatar: state.vkAvatar||''};
+          }
+        }catch(err){}
+      }
       if(rec && Array.isArray(rec.liked_ids)){
         state.likedIds={};
         for(const lid of rec.liked_ids) state.likedIds[lid]=true;
@@ -1261,7 +1278,7 @@ function wire(){
         const r=await fetch(API_BASE+'/api/vk/propose/', {
           method:'POST',
           headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
-          body: JSON.stringify({link: link, vk_user_id: state.vkUserId||'', vk_name: state.vkName||''})
+          body: JSON.stringify({link: link, vk_user_id: state.vkUserId||'', vk_name: state.vkName||'', vk_params: state.vkParams||undefined})
         });
         // если старый прод без нового API — 404, пробуем /add/
         if(r.status===404){

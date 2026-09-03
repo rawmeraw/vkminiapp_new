@@ -894,7 +894,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function fetchEmotions() {
-        fetch('/api/map-emotions/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        var emoUrl = '/api/map-emotions/';
+        /* VKMINI: для миника добавляем vk_user_id, чтобы backend отдал корректный is_mine */
+        try {
+            var vkctx = window.PermLiveMapVk;
+            if (vkctx && vkctx.vk_user_id) emoUrl += '?vk_user_id=' + encodeURIComponent(vkctx.vk_user_id);
+        } catch (e) {}
+        fetch(emoUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !data.emotions) return;
@@ -1045,6 +1051,29 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function deleteEmotion(em) {
+        /* VKMINI: из миника удаляем через VK-эндпоинт */
+        try {
+            var vkd = window.PermLiveMapVk;
+            if (vkd && vkd.vk_user_id) {
+                fetch('/api/vk/emotion/' + String(em.id) + '/', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ vk_user_id: vkd.vk_user_id, vk_params: vkd.vk_params || undefined })
+                }).then(function (r) {
+                    return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                }).then(function (res) {
+                    if (!res.ok) {
+                        showToast((res.d && res.d.error) || 'Не удалось удалить эмоцию');
+                        return;
+                    }
+                    removeEmotionMarker(em.id);
+                    showToast('Эмоция удалена');
+                }).catch(function () {
+                    showToast('Сеть недоступна, попробуйте ещё раз');
+                });
+                return;
+            }
+        } catch (e) {}
         fetch('/api/map-emotions/' + String(em.id) + '/', {
             method: 'DELETE',
             headers: {
@@ -1294,6 +1323,35 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         if (!anchor) return;
         var input = emotionComposerEl.querySelector('.pl-map-emotion-composer__input');
         var text = (input && input.value ? input.value : '').trim().slice(0, 120);
+        /* VKMINI: из миника постим через VK-эндпоинт (сессии нет, только vk_user_id) */
+        try {
+            var vkm = window.PermLiveMapVk;
+            if (vkm && vkm.vk_user_id) {
+                fetch('/api/vk/emotion/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ vk_user_id: vkm.vk_user_id, vk_params: vkm.vk_params || undefined, emoji: emotionSelected, text: text, coords: anchor, vk_name: vkm.vk_name || '', vk_avatar: vkm.vk_avatar || '' })
+                }).then(function (r) {
+                    return r.text().then(function (t) {
+                        var d = null;
+                        try { d = JSON.parse(t); } catch (err) {}
+                        return { ok: r.ok, status: r.status, d: d };
+                    });
+                }).then(function (res) {
+                    if (!res.ok) {
+                        showToast((res.d && res.d.error) || 'Ошибка сервера (' + res.status + '), попробуйте ещё раз');
+                        hideEmotionComposer();
+                        return;
+                    }
+                    addEmotion(res.d);
+                    hideEmotionComposer();
+                    showToast('Готово! Эмоция появится на карте на 6 часов');
+                }).catch(function () {
+                    showToast('Сеть недоступна, попробуйте ещё раз');
+                });
+                return;
+            }
+        } catch (e) {}
         fetch('/api/map-emotions/', {
             method: 'POST',
             headers: {
@@ -1578,6 +1636,41 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var input = state.proposeEl.querySelector('.pl-map-propose-input');
         var link = input ? input.value.trim() : '';
         if (!link) { showToast('Вставь ссылку на событие'); if (input) input.focus(); return; }
+        /* VKMINI: из миника отправляем через VK propose (только привязанные); /add/ с github.io не сработает */
+        try {
+            if (window.vkBridge) {
+                var vkp = window.PermLiveMapVk;
+                if (!vkp || !vkp.vk_user_id) {
+                    showToast('Войдите на permlive.ru через VK, чтобы предлагать события');
+                    return;
+                }
+                var pbtn = state.proposeEl.querySelector('.pl-map-propose-submit');
+                if (pbtn) { pbtn.disabled = true; pbtn.textContent = 'Отправляем…'; }
+                fetch('/api/vk/propose/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ link: link, vk_user_id: vkp.vk_user_id, vk_name: vkp.vk_name || '', vk_params: vkp.vk_params || undefined })
+                }).then(function (r) {
+                    return r.text().then(function (t) {
+                        var d = null;
+                        try { d = JSON.parse(t); } catch (err) {}
+                        return { ok: r.ok, d: d };
+                    });
+                }).then(function (res) {
+                    if (res.ok && res.d && (res.d.ok || res.d.error === 'duplicate' || res.d.error === 'in_db')) {
+                        hideProposeComposer();
+                        showToast(res.d.error ? 'Такое событие уже предложили — скоро проверим' : 'Спасибо! Проверим и добавим событие в афишу');
+                    } else {
+                        showToast((res.d && (res.d.message || res.d.error)) || 'Не удалось отправить. Проверь ссылку');
+                    }
+                }).catch(function () {
+                    showToast('Сеть недоступна, попробуй ещё раз');
+                }).then(function () {
+                    if (pbtn) { pbtn.disabled = false; pbtn.textContent = 'Отправить на проверку'; }
+                });
+                return;
+            }
+        } catch (e) {}
         var btn = state.proposeEl.querySelector('.pl-map-propose-submit');
         if (btn) { btn.disabled = true; btn.textContent = 'Отправляем…'; }
         var csrf = (window.PermLiveMapData && window.PermLiveMapData.csrf) || '';
