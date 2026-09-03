@@ -143,9 +143,9 @@ async function loadData(){
     state.datesWithEvents=new Set(cal.dates);
     if(cal.today) state.todayISO=cal.today;
   }
-  // fetch concerts pool — limit 80 for github pages speed (was 500, too heavy)
+  // we show only 20 images on screen, no need 80/500 — limit 30 for speed
   let pool = [];
-  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=80`, 5*60*1000);
+  const api = await cachedFetch('pl_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30`, 5*60*1000);
   if(api){
     const results = Array.isArray(api.results)?api.results: Array.isArray(api)?api: [];
     pool = results.map(normalizeApiConcert).filter(c=>c.slug && c.date);
@@ -497,8 +497,11 @@ function renderSliders(){
     els.timelineWrap.style.display='none';
     const top10Total = state.top10Pool.length;
     renderSlider(els.sliderTop10, els.top10Row, state.top10Pool, top10Total, 'top10', 'Топ-10');
-    els.top10TitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('top10')};
-    els.top10Badge.onclick=(e)=>{e.preventDefault(); openTimeline('top10')};
+    // топ-10 не должен быть ссылкой на таймлайн (per request)
+    els.top10TitleLink.onclick=null;
+    els.top10TitleLink.style.cursor='default';
+    els.top10TitleLink.removeAttribute('href');
+    if(els.top10Badge) els.top10Badge.style.display='none';
     const upcomingTotal = state.upcomingPool.length;
     renderSlider(els.sliderUpcoming, els.upcomingRow, state.upcomingPool, upcomingTotal, 'upcoming', 'Ближайшие');
     els.upcomingTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
@@ -646,6 +649,11 @@ function openTimeline(type){
   state.timelineMode = type;
   applyFilter();
   history.pushState({timeline:type},'',`#timeline-${type}`);
+  // скролл к самому верху таймлайна, а не чуть ниже — без smooth смещения
+  requestAnimationFrame(function(){
+    const top = els.timelineWrap.getBoundingClientRect().top + window.scrollY - 64; // header height
+    window.scrollTo({top: Math.max(0, top), behavior:'auto'});
+  });
 }
 
 // Sheet
