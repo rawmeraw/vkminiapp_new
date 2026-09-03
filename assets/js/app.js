@@ -236,7 +236,6 @@ async function loadData(){
       state.vkParams=vkParams;
       // без кэша: отрицательный результат не должен залипать
       const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`);
-      console.log('[foryou] vkId=', vkId, 'rec=', rec && {has_user: rec.has_user, has_rec: rec.has_recommendations, count: rec.count});
       state.hasAccount = !!(rec && rec.has_user);
       // для привязанных — реальное имя и аватар из VK для эмоций на карте.
       // ME в коде карты — ссылка на этот же объект, мутируем поля, не заменяем.
@@ -267,13 +266,11 @@ async function loadData(){
         }
         state.forYouPool=list;
         state.hasForYou=true;
-        console.log('[foryou] pool=', list.map(c=>c.slug));
       } else {
         state.forYouPool=[]; state.hasForYou=false;
       }
     } else if(vkName){
       state.vkName=vkName;
-      console.log('[foryou] no vkId, skip');
     }
     // сердечки балунов карты — только при привязанном аккаунте
     try{ document.body.classList.toggle('vk-no-account', !state.hasAccount); }catch(e){}
@@ -649,7 +646,6 @@ function renderSliders(){
     // foryou — третий слайдер как на сайте, только если есть рекомендации
     if(els.sliderForyou){
       const shouldShow = state.hasForYou && state.forYouPool.length>0;
-      console.log('[foryou] render: hasForYou=', state.hasForYou, 'pool=', state.forYouPool.length, 'show=', shouldShow);
       els.sliderForyou.style.display = shouldShow ? '' : 'none';
       if(shouldShow){
         renderSlider(els.sliderForyou, els.foryouRow, state.forYouPool, state.forYouPool.length, 'foryou', 'Рекомендации для вас');
@@ -1098,7 +1094,6 @@ function updateForyouOption(){
   // Важно: ставим явный 'flex', т.к. в CSS есть правило display:none,
   // которое пустой инлайн-стиль не перебивает.
   const hasAny = state.hasForYou && state.forYouPool.length>0;
-  console.log('[foryou] map option: hasForYou=', state.hasForYou, 'pool=', state.forYouPool.length, 'show=', hasAny);
   foryouOpt.style.display = hasAny ? 'flex' : 'none';
   if(!hasAny && state.mapMode==='foryou'){
     state.mapMode='all';
