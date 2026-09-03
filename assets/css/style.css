@@ -38,7 +38,7 @@ body{overflow-x:hidden;overflow-y:visible !important;max-width:100vw}
 /* свой крестик очистки — нативный прячем везде, чтобы не было двух */
 #search-input::-webkit-search-cancel-button,#search-input::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none}
 #search-input::-ms-clear{display:none;width:0;height:0}
-.search-clear{flex:none;border:0;background:transparent;color:var(--muted);font-size:15px;cursor:pointer;padding:2px;line-height:1}
+.search-clear{flex:none;border:0;background:transparent;color:var(--muted);font-size:15px;cursor:pointer;padding:2px;line-height:1;margin-top:1px}
 /* свайп-назад: горизонтальные жесты забирают слайдеры/календарь/карта, а не браузер */
 html,body{overscroll-behavior-x:none}
 .horizontal-slider-row{touch-action:pan-y}
