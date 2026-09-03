@@ -234,6 +234,12 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 #view-map .pl-map-mode-dropdown{z-index:10003 !important}
 .pl-map-controls{z-index:10003 !important;right:12px !important;padding:4px !important;margin:-4px !important;width:auto !important}
 .pl-map-controls .pl-map-control-btn{margin:2px 0}
+/* календарь над картой по центру, а не слева от карты на широком экране */
+@media (min-width:768px){
+  .pl-map-calendar-modal{left:50% !important;top:50% !important;transform:translate(-50%,-50%) scale(0.96) !important}
+  .pl-map-calendar-modal--open{transform:translate(-50%,-50%) scale(1) !important}
+  .pl-map-calendar-overlay{background:rgba(15,18,24,.35) !important}
+}
 #view-map.is-fullscreen{max-width:none !important;padding:0 !important}
 #view-map.is-fullscreen #map{position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;max-width:none !important;border-radius:0 !important;z-index:9998 !important}
 

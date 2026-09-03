@@ -763,34 +763,28 @@ function ensureMapButtons(){
     }
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
-    // right controls — fullscreen один, ниже геопозиции (вторым)
+    // right controls — один рабочий fullscreen ниже геопозиции (вторым), лишние удалить
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
-    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b,i){ if(i>0) b.remove(); });
-    let fsBtn=document.querySelector('.pl-map-fullscreen-btn');
-    if(!fsBtn){
-      fsBtn=document.createElement('button');
-      fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
-      fsBtn.title='На весь экран';
-      fsBtn.innerHTML='<i class="fa-solid fa-expand"></i>';
-      fsBtn.onclick=function(){
-        const wrap=document.getElementById('view-map');
-        const isFs=wrap.classList.toggle('is-fullscreen');
-        fsBtn.innerHTML=isFs?'<i class="fa-solid fa-compress"></i>':'<i class="fa-solid fa-expand"></i>';
-        try{ window.dispatchEvent(new Event('resize')); }catch(e){}
-        setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
-      };
-      // ниже геопозиции — вторым в колонке
-      if(controls.children.length>0) controls.insertBefore(fsBtn, controls.children[1] || null);
-      else controls.appendChild(fsBtn);
-    } else {
-      if(controls.children.length>1) controls.insertBefore(fsBtn, controls.children[1]);
-      else controls.appendChild(fsBtn);
-    }
+    // убрать все старые fullscreen (нерабочие) и создать один рабочий вторым
+    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b){ b.remove(); });
+    const fsBtn=document.createElement('button');
+    fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
+    fsBtn.title='На весь экран';
+    fsBtn.innerHTML='<i class="fa-solid fa-expand"></i>';
+    fsBtn.onclick=function(){
+      const wrap=document.getElementById('view-map');
+      const isFs=wrap.classList.toggle('is-fullscreen');
+      fsBtn.innerHTML=isFs?'<i class="fa-solid fa-compress"></i>':'<i class="fa-solid fa-expand"></i>';
+      try{ window.dispatchEvent(new Event('resize')); }catch(e){}
+      setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
+    };
+    if(controls.children.length>0) controls.insertBefore(fsBtn, controls.children[1] || null);
+    else controls.appendChild(fsBtn);
   }, 300);
   // повтор через 1с на случай позднего создания events-map контролов
   setTimeout(function(){
@@ -833,7 +827,16 @@ function addCommonControls(){
   });
 }
 
+function updateMapFiltersBlack(){
+  const dBtn=document.querySelector('.pl-map-date-btn');
+  const mBtn=document.querySelector('.pl-map-mode-btn');
+  const isDateFiltered = !!state.selectedDate || !!state.range;
+  const isModeFiltered = state.mapMode!=='all';
+  if(dBtn) dBtn.classList.toggle('pl-map-date-btn--filtered', isDateFiltered);
+  if(mBtn) mBtn.classList.toggle('pl-map-mode-btn--filtered', isModeFiltered);
+}
 function refreshMapMarkers(){
+  updateMapFiltersBlack();
   // Yandex - site logic via PermLiveMaps.setEvents (как на /map/ - без мока Leaflet)
   let listY=[];
   if(state.range) listY=state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
