@@ -773,7 +773,7 @@ function initMap(){
 }
 function ensureMapButtons(){
   setTimeout(function(){
-    // left calendar/mode — создать если нет (events-map inline не скопирован в vkminiapp)
+    // left calendar/mode — создать если нет
     let dateBtn=document.querySelector('.pl-map-date-btn');
     if(!dateBtn){
       dateBtn=document.createElement('button');
@@ -809,16 +809,19 @@ function ensureMapButtons(){
     }
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
-    // right controls — один рабочий fullscreen, первым (верхняя работает, нижнюю лишнюю убрали)
+    // right controls — один рабочий fullscreen ниже геопозиции, зум в том же столбце, посвободнее
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
       controls.className='pl-map-controls';
       els.mapEl.appendChild(controls);
     }
-    // убрать все старые fullscreen (включая нерабочий второй)
-    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b){ b.remove(); });
-    Array.from(controls.querySelectorAll('button')).filter(function(b){return b.innerHTML.includes('fa-expand')||b.innerHTML.includes('fa-compress')}).forEach(function(b){ if(!b.classList.contains('pl-map-fullscreen-btn')) b.remove(); });
+    // убрать все старые fullscreen/zoom
+    Array.from(controls.querySelectorAll('button')).filter(function(b){return b.innerHTML.includes('fa-expand')||b.innerHTML.includes('fa-compress')||b.innerHTML.includes('fa-plus')||b.innerHTML.includes('fa-minus')}).forEach(function(b){b.remove()});
+    document.querySelectorAll('.pl-map-fullscreen-btn').forEach(function(b){b.remove()});
+    // скрыть яндекс zoom
+    const yZoom=document.querySelector('.ymaps3x-zoom-control');
+    if(yZoom) yZoom.style.display='none';
     const fsBtn=document.createElement('button');
     fsBtn.className='pl-map-control-btn pl-map-fullscreen-btn';
     fsBtn.title='На весь экран';
@@ -830,12 +833,25 @@ function ensureMapButtons(){
       try{ window.dispatchEvent(new Event('resize')); }catch(e){}
       setTimeout(function(){ try{ window.dispatchEvent(new Event('resize')); }catch(e){} }, 300);
     };
-    controls.prepend(fsBtn);
+    if(controls.children.length>0) controls.insertBefore(fsBtn, controls.children[1] || null);
+    else controls.appendChild(fsBtn);
+    const zin=document.createElement('button');
+    zin.className='pl-map-control-btn';
+    zin.title='Приблизить';
+    zin.innerHTML='<i class="fa-solid fa-plus"></i>';
+    zin.onclick=function(){ try{ const y=document.querySelector('.ymaps3x-zoom-control button:first-child'); if(y) y.click(); }catch(e){} };
+    const zout=document.createElement('button');
+    zout.className='pl-map-control-btn';
+    zout.title='Отдалить';
+    zout.innerHTML='<i class="fa-solid fa-minus"></i>';
+    zout.onclick=function(){ try{ const y=document.querySelector('.ymaps3x-zoom-control button:last-child'); if(y) y.click(); }catch(e){} };
+    controls.appendChild(zin);
+    controls.appendChild(zout);
     controls.style.width='56px';
     controls.style.padding='6px';
     controls.style.gap='10px';
   }, 300);
-  // повтор через 1с — левые кнопки и лишний fullscreen (любой с expand)
+  // повтор через 1с — левые кнопки и лишний fullscreen
   setTimeout(function(){
     const d=document.querySelector('.pl-map-date-btn');
     const m=document.querySelector('.pl-map-mode-btn');
