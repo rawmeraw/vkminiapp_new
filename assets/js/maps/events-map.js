@@ -3,7 +3,7 @@
     'use strict';
 
     var LOCATION_KEY = 'permlive_user_location';
-    var LOCATION_TTL = 12 * 60 * 60 * 1000;
+    var LOCATION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 дней — запоминаем до чистки куки
     var DEFAULT_CENTER = [56.2502, 58.0105];
 
     var GENRE_COLORS = {
@@ -2291,7 +2291,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             }
         } catch (err) {  }
 
-        requestUserLocation(false, true);
+        // не запрашивать геопозицию автоматом — только по клику на кнопку, запоминаем до чистки куки
+        // requestUserLocation(false, true);
         fetchEmotions();
 
         window.__PermLiveMapReady = true;

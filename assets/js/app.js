@@ -90,15 +90,15 @@ function optimizeMiniImage(url){
   if(!url || typeof url!=='string') return url;
   try{
     if(url.includes('vkuserphoto.ru') || url.includes('userapi.com')){
-      // keep 400-540 like site, 200 too small and may 404 for some sizes — use 400
-      if(url.match(/cs=\d+x\d+/)) return url.replace(/cs=\d+x\d+/, 'cs=400x400');
+      // miniapp — 200 для скорости (проверено, 200 есть в card-sm), фолбэк на 400 если 200 нет
+      if(url.match(/cs=\d+x\d+/)) return url.replace(/cs=\d+x\d+/, 'cs=200x200');
       const sep = url.includes('?') ? '&' : '?';
-      return url + sep + 'cs=400x400';
+      return url + sep + 'cs=200x200';
     }
     if(url.includes('cdn.qtickets.tech')) return url;
     if(url.includes('ponominalu.ru/media/i/')) return url.replace(/\/media\/i\/\d+x\d+\//, '/media/i/400x300/');
     if(url.includes('live.mts.ru/image/')) return url;
-    if(url.includes('mycdn.me') && url.includes('size=')) return url.replace(/size=[^&]+/, 'size=400x400');
+    if(url.includes('mycdn.me') && url.includes('size=')) return url.replace(/size=[^&]+/, 'size=200x200');
   }catch(e){}
   return url;
 }

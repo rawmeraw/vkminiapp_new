@@ -21,8 +21,11 @@ a:hover{color:var(--red)}
 .concert-card:hover .card-title{color:inherit !important}
 #view-feed a:hover{color:inherit}
 #view-feed .schedule-title:hover{color:var(--red) !important}
-html{overflow-y:auto}
-body{overflow:visible !important}
+html{overflow-y:auto;overflow-x:hidden;max-width:100vw}
+body{overflow-x:hidden;max-width:100vw;width:100%;overflow-y:auto}
+#app, .page-container{max-width:100vw;overflow-x:hidden}
+.horizontal-slider{overflow:visible !important}
+.horizontal-slider-row{overflow-x:auto !important;overflow-y:visible !important;-webkit-overflow-scrolling:touch;max-width:100%}
 .hidden{display:none !important}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
