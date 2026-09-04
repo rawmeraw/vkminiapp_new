@@ -300,7 +300,7 @@ function normalizeApiConcert(c){
     bg_color: bg, main_image: img, images: c.images||[], price: c.price ?? '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
-    tags: c.tags||[], description:c.description||'', similar: (c.similar||[]).map(normalizeApiConcertLight)
+    tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight)
   };
 }
 function normalizeApiConcertLight(c){
@@ -1012,6 +1012,12 @@ function renderDetail(c, isFull){
   const pricePart = !tickets ? (c.price===0 ? ' › Бесплатно' : (c.price ? ` › ${c.price}₽` : '')) : '';
   const infoStr = [dateStr||'Дата уточняется', venue||''].filter(Boolean).join(' › ') + pricePart;
   const srcLink = c.link || '';
+  const bands = (c.bands||[]).filter(b=>b && b.name);
+  const bandsHTML = bands.length ? `<div class="detail__performers"><h3>Исполнители</h3><div class="detail__performers-row">${bands.map(b=>{
+    const av = b.avatar ? `<img src="${esc(b.avatar)}" alt="${esc(b.name)}" loading="lazy">` : `<span class="detail__performer-ph"><i class="fas fa-music"></i></span>`;
+    const href = b.slug ? `https://permlive.ru/menu/bands/${esc(b.slug)}/` : '#';
+    return `<a class="detail__performer" ${b.bg_color? `style="background-color:${esc(b.bg_color)}"`:''} href="${href}" target="_blank" rel="noopener"><span class="detail__performer-av">${av}</span><span class="detail__performer-info"><span class="detail__performer-name">${esc(b.name)}</span>${b.music_style? `<span class="detail__performer-style">${esc(b.music_style)}</span>`:''}</span></a>`;
+  }).join('')}</div></div>` : '';
   const similar = (c.similar||[]).filter(s=>s.slug!==c.slug && (!s.date || s.date>=state.todayISO)).slice(0,10);
   els.detailContent.innerHTML = `
     <button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button>
@@ -1023,6 +1029,7 @@ function renderDetail(c, isFull){
         ${tickets? ticketBtnHTML(tickets, c.price):''}
       </div>
     </div>
+    ${bandsHTML}
     <div class="detail__actions">
       ${routeHref? `<a class="pl-btn detail-route--yandex" href="${routeHref}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Маршрут</a>`:''}
       <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
