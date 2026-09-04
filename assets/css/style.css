@@ -349,7 +349,8 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail__desc{font-family:'IBM Plex Serif',serif;font-size:15px;line-height:1.65;color:#333;margin-top:16px;word-break:break-word}
 .detail__desc a{color:var(--red);text-decoration:none}
 .detail__similar{margin-top:20px}
-.detail__similar h3{font-size:16px;margin:0 0 8px}
+.detail__similar>h3{font-size:16px;margin:0 0 8px}
+.detail__similar .card-title{font-size:13px}
 .detail__site-link{margin-top:14px;text-align:center}
 .detail__site-link a{font-size:13px;color:#888;text-decoration:underline;text-underline-offset:2px}
 .detail__skeleton{padding:24px;text-align:center;color:#999}
