@@ -51,6 +51,8 @@ const els = {
   timelineEmpty: $('#timeline-empty'),
   timelineWrap: $('#timeline-wrap'),
   feedSliders: $('#feed-sliders'),
+  viewDetail: $('#view-detail'),
+  detailContent: $('#detail-content'),
   searchInput: $('#search-input'),
   toast: $('#toast'),
   sheet: $('#event-sheet'),
@@ -141,6 +143,9 @@ const state = {
   mapMode: 'all',
   todayISO: ekbTodayISO(),
   timelineMode: null,
+  detailSlug: null,
+  detailCache: {},
+  prevView: 'feed',
 };
 
 async function fetchJSON(url){
@@ -286,12 +291,29 @@ function normalizeApiConcert(c){
   const placeName = c.place?.name || c.place_name || '';
   const bg = c.bg_color || c.place?.bg_color || hashColor(slug||placeName||String(c.id));
   const img = c.main_image || c.image || c.images?.[0]?.url || '';
+  const place = c.place||{name:placeName, coordinates:c.coordinates||'58.0105,56.2502', address:c.address||''};
+  if(!place.slug && c.place?.slug) place.slug=c.place.slug;
+  if(!place.map && c.place?.map) place.map=c.place.map;
   return {
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
-    place: c.place||{name:placeName, coordinates:c.coordinates||'58.0105,56.2502', address:c.address||''}, place_name: placeName,
+    place, place_name: placeName,
+    bg_color: bg, main_image: img, images: c.images||[], price: c.price ?? '',
+    cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
+    is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
+    tags: c.tags||[], description:c.description||'', similar: (c.similar||[]).map(normalizeApiConcertLight)
+  };
+}
+function normalizeApiConcertLight(c){
+  const slug = c.slug || extractSlug(c.url||c.link||'');
+  const placeName = c.place?.name || c.place_name || '';
+  const bg = c.bg_color || c.place?.bg_color || hashColor(slug||placeName||String(c.id));
+  const img = c.main_image || c.image || '';
+  return {
+    id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
+    place: c.place||{name:placeName}, place_name: placeName,
     bg_color: bg, main_image: img, price: c.price ?? '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
-    is_paid: !!c.is_paid, tickets:c.tickets||c.link||'', tags: c.tags||[], description:c.description||''
+    is_paid: !!c.is_paid, tickets:c.tickets||'', tags: c.tags||[], description:''
   };
 }
 function normalizeApiEvent(e){
@@ -571,7 +593,7 @@ function cardHTML(c, opts={}){
   const imgUrl = c.main_image ? optimizeMiniImage(c.main_image) : '';
   const img = imgUrl? `<img class="card-img" src="${esc(imgUrl)}" alt="${esc(c.title)}" loading="lazy" decoding="async">` : `<div class="card-img-placeholder"></div>`;
   const slug = c.slug || extractSlug(c.url||'');
-  const href = slug ? `https://permlive.ru/event/${esc(slug)}/` : '#';
+  const href = slug ? `#/event/${esc(slug)}/` : '#';
   const dObj = parseISO(c.date);
   let dateText='';
   if(isDateSlider){
@@ -585,7 +607,7 @@ function cardHTML(c, opts={}){
   const heart = state.hasAccount
     ? `<span class="card-like${state.likedIds[c.id]?' liked':''}" data-id="${c.id}" role="button" aria-label="Лайк"><i class="fa-solid fa-heart"></i></span>`
     : '';
-  return `<a class="concert-card" href="${href}" target="_blank" rel="noopener" data-slug="${esc(slug)}" data-id="${c.id}" style="--card-bg-color:${esc(bg)}">
+  return `<a class="concert-card" href="${href}" data-slug="${esc(slug)}" data-id="${c.id}" style="--card-bg-color:${esc(bg)}">
     <div class="card-img-wrapper">${img}${rank}${ratingBadge}${heart}</div>
     <div class="card-info">
       <h3 class="card-title">${esc(c.title)}</h3>
@@ -752,7 +774,7 @@ function renderTimeline(){
       const slug=c.slug||extractSlug(c.url||'');
       const row=document.createElement('div'); row.className='schedule-event';
       row.innerHTML=`<span class="schedule-time">${esc(c.time||'')}</span>
-        <a class="schedule-title" href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fa-solid fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
+        <a class="schedule-title" href="#/event/${esc(slug)}/" data-slug="${esc(slug)}">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fa-solid fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
         <span class="schedule-details">${esc(c.place_name||c.place?.name||'')} ${c.tags?.length? '› '+esc(c.tags[0].name):''} ${c.price===0?'› бесплатно': c.price? `› ${c.price}₽`:''}</span>`;
       events.appendChild(row);
     });
@@ -851,6 +873,153 @@ function openSheet(c){
 }
 function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverlay.classList.remove('sheet-overlay--show'); }
 
+// ---------- Detail page ----------
+function linkify(s){
+  const t = esc(s||'');
+  return t
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n/g, '<br>');
+}
+function detailFromCache(slug){
+  return state.concerts.find(c=>c.slug===slug) || state.detailCache[slug] || null;
+}
+async function fetchDetail(slug){
+  if(state.detailCache[slug] && state.detailCache[slug]._full) return state.detailCache[slug];
+  let url = `${API_BASE}/api/concert/${encodeURIComponent(slug)}/`;
+  if(state.vkUserId) url += `?vk_user_id=${encodeURIComponent(state.vkUserId)}`;
+  const j = await fetchJSON(url);
+  if(j && j.slug){
+    const c = normalizeApiConcert(j);
+    c._full = true;
+    if(j.is_liked) state.likedIds[c.id]=true;
+    state.detailCache[slug]=c;
+    // обновить и общий пул, чтобы карточки знали описание
+    const i = state.concerts.findIndex(x=>x.slug===slug);
+    if(i>=0) state.concerts[i]={...state.concerts[i], ...c};
+    else state.concerts.push(c);
+    return c;
+  }
+  return null;
+}
+async function openDetail(slug, push=true){
+  slug = (slug||'').replace(/\/+$/,'');
+  if(!slug) return;
+  // запомнить откуда пришли, чтобы «Назад» возвращал
+  if(!state.detailSlug){
+    state.prevView = state.tab;
+    try{ state.prevScroll = window.scrollY; }catch(e){ state.prevScroll=0; }
+  }
+  state.detailSlug = slug;
+  state.tab = 'detail';
+  els.viewFeed.classList.remove('view--active');
+  els.viewMap.classList.remove('view--active');
+  if(els.viewAdd) els.viewAdd.classList.remove('view--active');
+  els.viewDetail.classList.add('view--active');
+  $$('.pl-header-link').forEach(a=>a.classList.remove('active'));
+  $$('.pl-tabbar__btn').forEach(b=>{ b.classList.remove('pl-tabbar__btn--active'); b.setAttribute('aria-selected','false'); });
+  window.scrollTo({top:0});
+  // скелетон
+  const cached = detailFromCache(slug);
+  renderDetail(cached, false);
+  if(push){
+    try{ history.pushState({detail:slug}, '', `#/event/${slug}/`); }catch(e){ location.hash=`#/event/${slug}/`; }
+  }
+  try{ bridge && bridge.send('VKWebAppSetViewSettings',{status_bar_style:'light', action_bar_color:'#ffffff'}); }catch(e){}
+  const full = await fetchDetail(slug);
+  if(state.detailSlug!==slug) return; // ушли дальше
+  if(full) renderDetail(full, true);
+  else if(!cached) els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Не удалось загрузить концерт.<br><a href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener">Открыть на сайте</a></div>`;
+  wireDetailBack();
+}
+function closeDetail(push=true){
+  state.detailSlug = null;
+  els.viewDetail.classList.remove('view--active');
+  const back = state.prevView && state.prevView!=='detail' ? state.prevView : 'feed';
+  if(push){
+    try{ history.pushState({tab:back}, '', location.pathname + location.search); }catch(e){}
+  }
+  switchTab(back, true);
+  if(state.prevScroll!=null){ requestAnimationFrame(()=> window.scrollTo({top: state.prevScroll||0, behavior:'auto'})); }
+}
+function wireDetailBack(){
+  const b = document.getElementById('detail-back');
+  if(b && !b._wired){ b._wired=true; b.onclick=()=>{ try{ history.back(); }catch(e){ closeDetail(); } setTimeout(()=>{ if(state.detailSlug) closeDetail(); }, 300); }; }
+}
+function renderDetail(c, isFull){
+  if(!c){
+    els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Загрузка…</div>`;
+    wireDetailBack();
+    return;
+  }
+  const dObj = c.date ? parseISO(c.date) : null;
+  const dateStr = dObj ? `${fmtHeaderDate(dObj)}${c.time? ' в '+esc(c.time.slice(0,5)):''}` : '';
+  const venue = esc(c.place_name||c.place?.name||'');
+  const priceStr = c.price===0 ? 'Вход свободный' : (c.price ? `от ${c.price}₽` : '');
+  const ratingNum = parseFloat(c.cached_rating||0);
+  const ratingVal = c.display_rating||c.cached_rating||'';
+  const imgUrl = c.main_image || '';
+  const heroImg = imgUrl ? `<img class="detail__img" src="${esc(imgUrl)}" alt="${esc(c.title)}">` : `<div class="detail__img detail__img--placeholder"></div>`;
+  const badge = ratingVal ? `<div class="detail__rating-badge ${ratingNum>=5?'featured':''}"><i class="fa-solid fa-star"></i> ${esc(ratingVal)}</div>` : '';
+  const heart = state.hasAccount
+    ? `<button class="detail__like${state.likedIds[c.id]?' liked':''}" data-id="${c.id}" aria-label="Лайк"><i class="fa-solid fa-heart"></i></button>` : '';
+  const tags = (c.tags||[]).map(t=>`<span class="tag">${esc(t.name)}</span>`).join('');
+  const coords = c.place?.coordinates || '';
+  const routeHref = coords ? `https://yandex.ru/maps/?rtext=~${esc(coords)}` : '';
+  const addr = c.place?.address ? esc(c.place.address) : '';
+  const tickets = c.tickets || '';
+  const srcLink = c.link || '';
+  const similar = (c.similar||[]).filter(s=>s.slug!==c.slug).slice(0,10);
+  els.detailContent.innerHTML = `
+    <button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button>
+    <div class="detail__hero">${heroImg}${badge}${heart}
+      <div class="detail__hero-overlay">
+        <h1 class="detail__title">${esc(c.title)}</h1>
+        <div class="detail__hero-meta">${esc(dateStr)}${venue? ' · '+venue:''}</div>
+      </div>
+    </div>
+    <div class="detail__row"><i class="fas fa-calendar"></i><span>${esc(dateStr)||'Дата уточняется'}</span></div>
+    <div class="detail__row"><i class="fas fa-location-dot"></i><span>${venue||'Площадка уточняется'}${addr? ' · '+addr:''}${priceStr? ' · '+esc(priceStr):''}</span></div>
+    ${tags? `<div class="detail__tags">${tags}</div>`:''}
+    <div class="detail__rating-line">
+      <span class="detail__rating-val"><i class="fa-solid fa-star"></i> ${esc(ratingVal||'—')}</span>
+      ${c.is_paid? '<span class="tag">★ Топ</span>':''}
+      <span class="detail__likes">
+        <span id="detail-likes-hint">${state.hasAccount? '':''}</span>
+        ${state.hasAccount? `<button class="detail__like-btn${state.likedIds[c.id]?' liked':''} card-like" data-id="${c.id}" aria-label="Лайк"><i class="fa-solid fa-heart"></i></button>`:''}
+      </span>
+    </div>
+    <div class="detail__actions">
+      ${tickets? `<a class="pl-btn" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i> Купить билет${c.price? ' · '+c.price+'₽':''}</a>`:''}
+      ${routeHref? `<a class="pl-btn pl-btn--secondary" href="${routeHref}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Маршрут</a>`:''}
+      <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
+    </div>
+    ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
+    ${venue? `<div class="detail__place"><b>${venue}</b>${addr? `<span>${addr}</span>`:''}</div>`:''}
+    ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
+      : `<div class="detail__site-link"><a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
+    ${similar.length? `<div class="detail__similar"><h3>Похожие концерты</h3><div class="horizontal-slider-row">${similar.map(s=>cardHTML(s,{mode:'similar'})).join('')}</div></div>`:''}
+  `;
+  wireDetailBack();
+  const mapBtn = document.getElementById('detail-map-btn');
+  if(mapBtn) mapBtn.onclick=()=>{
+    const keep = state.detailSlug;
+    closeDetail(false);
+    switchTab('map');
+    // подтянуть дату концерта на карте
+    if(c.date){ state.selectedDate=c.date; try{ renderCalendarStrip(); }catch(e){} loadMapForDate(c.date); }
+    else refreshMapMarkers();
+    if(coords){
+      const [lat,lng]=coords.split(',').map(Number);
+      setTimeout(()=>{ try{
+        const m=window.Perm || (window.PermLiveMaps && window.PermLiveMaps._map);
+        if(m && m.setLocation) m.setLocation({location:{point:{coordinates:[lng,lat]}, zoom:14}, duration:300});
+      }catch(e){} }, 600);
+    }
+    try{ history.pushState({detail:keep}, '', `#/event/${keep}/`); state.detailSlug=keep; }catch(e){}
+    // сразу назад из карты — вернуться в деталку: подменяем поведение back через popstate
+  };
+}
+
 // Лайк без перезагрузки: обновляем сердечко и рейтинг прямо в DOM
 async function toggleLike(concertId, btn){
   concertId = Number(concertId);
@@ -874,11 +1043,15 @@ async function toggleLike(concertId, btn){
         if(Number(c.id)===concertId){ c.display_rating=j.rating; c.cached_rating=j.rating; }
       }
     }
-    // обновляем все сердечки этого концерта на странице (карточки, попап, балуны карты)
-    document.querySelectorAll(`.card-like[data-id="${concertId}"], .sheet-like[data-id="${concertId}"]`).forEach(function(b){
+    // обновляем все сердечки этого концерта на странице (карточки, попап, деталка, балуны карты)
+    document.querySelectorAll(`.card-like[data-id="${concertId}"], .sheet-like[data-id="${concertId}"], .detail__like[data-id="${concertId}"]`).forEach(function(b){
       b.classList.toggle('liked', !!j.liked);
       b.style.pointerEvents='';
     });
+    for(const k of Object.keys(state.detailCache||{})){
+      const dc=state.detailCache[k];
+      if(dc && Number(dc.id)===concertId){ dc.display_rating=j.rating; dc.cached_rating=j.rating; }
+    }
     document.querySelectorAll(`.pl-map-balloon__like[data-like-id="${concertId}"]`).forEach(function(b){
       b.classList.toggle('is_liked', !!j.liked);
       const icon=b.querySelector('i');
@@ -898,6 +1071,11 @@ async function toggleLike(concertId, btn){
     if(sheetHeart) sheetHeart.classList.toggle('liked', !!j.liked);
     const sheetRating = document.getElementById('sheet-rating');
     if(sheetRating) sheetRating.innerHTML = `<i class="fa-solid fa-star"></i> ${esc(j.rating)}`;
+    // и в деталке
+    const dVal = document.querySelector(`#view-detail .detail__rating-val`);
+    if(dVal && state.detailSlug) dVal.innerHTML = `<i class="fa-solid fa-star"></i> ${esc(j.rating)}`;
+    const dBadge = document.querySelector(`#view-detail .detail__rating-badge`);
+    if(dBadge){ dBadge.innerHTML = `<i class="fa-solid fa-star"></i> ${esc(j.rating)}`; dBadge.classList.toggle('featured', parseFloat(j.rating)>=5); }
   }catch(e){
     toast('Нет соединения, попробуйте позже');
   }finally{
@@ -1180,12 +1358,13 @@ async function loadMapForDate(iso){
   }
 }
 
-function switchTab(tab){
+function switchTab(tab, keepHistory){
   if(tab==='calendar'){
     // по слову календарь — просто главная, без открытия календаря
     tab='feed';
   }
   state.tab=tab;
+  if(tab!=='detail') state.detailSlug=null;
   document.body.classList.remove('map-fullscreen','pl-map-fs');
   document.documentElement.style.removeProperty('height');
   document.body.style.removeProperty('overflow');
@@ -1206,6 +1385,7 @@ function switchTab(tab){
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
   if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
+  if(els.viewDetail) els.viewDetail.classList.toggle('view--active', tab==='detail');
   if(tab==='map'){
     initMap();
     // карта была display:none — дать ей размер и перерисовать дважды
@@ -1217,6 +1397,12 @@ function switchTab(tab){
     setTimeout(redo, 80);
     setTimeout(redo, 350);
     try{ bridge && bridge.send('VKWebAppSetViewSettings',{status_bar_style:'light', action_bar_color:'#ffffff'});}catch(e){}
+  }
+  if(!keepHistory){
+    try{
+      const url = location.pathname + location.search;
+      if(location.hash && location.hash.startsWith('#/event/')) history.pushState({tab}, '', url);
+    }catch(e){}
   }
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -1235,8 +1421,29 @@ function wire(){
     b.addEventListener('click', function(e){
       e.preventDefault();
       const tab=this.dataset.tab;
-      if(tab) switchTab(tab);
+      if(tab){
+        if(state.detailSlug) { state.prevView=tab; closeDetail(false); }
+        switchTab(tab);
+      }
     });
+  });
+  // Детальные страницы: перехватываем все ссылки на /event/<slug>/ и #/event/<slug>/
+  document.addEventListener('click', function(e){
+    // сердечки внутри карточек — это лайки, а не переход
+    try{
+      if(e.target && e.target.closest && e.target.closest('.card-like, .sheet-like, .detail__like, .pl-map-balloon__like')) return;
+    }catch(err){}
+    const a = e.target && e.target.closest ? e.target.closest('a[href*="/event/"]') : null;
+    if(!a) return;
+    // внешние кнопки («Открыть на сайте», билеты, источник) — пропускаем
+    if(a.target==='_blank') return;
+    const href = a.getAttribute('href')||'';
+    const slug = extractSlug(href);
+    if(!slug) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try{ closeSheet(); }catch(err){}
+    openDetail(slug);
   });
   // add form — vk.ru без схемы и кириллица, проверка по link полям, API без CSRF
   const addForm=document.getElementById('add-form');
@@ -1389,7 +1596,7 @@ function wire(){
   els.calendarInner.addEventListener('dblclick', openCalendar);
   // лайки: делегированный клик по сердечкам (карточки — ссылки, переход отменяем)
   document.addEventListener('click', function(e){
-    const heart = e.target && e.target.closest ? e.target.closest('.card-like[data-id], .sheet-like[data-id]') : null;
+    const heart = e.target && e.target.closest ? e.target.closest('.card-like[data-id], .sheet-like[data-id], .detail__like[data-id]') : null;
     if(!heart) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1409,7 +1616,14 @@ function wire(){
   // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
   document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); }});
   window.addEventListener('popstate', e=>{
+    if(e.state && e.state.detail){ openDetail(e.state.detail, false); return; }
+    if(state.detailSlug){ closeDetail(false); return; }
     if(e.state && e.state.timeline) openTimeline(e.state.timeline);
+  });
+  window.addEventListener('hashchange', ()=>{
+    const m = location.hash.match(/^#\/event\/([^\/]+)\/?$/);
+    if(m && m[1] && m[1]!==state.detailSlug) openDetail(m[1], false);
+    else if(!m && state.detailSlug) closeDetail(false);
   });
 }
 
@@ -1432,11 +1646,16 @@ function wire(){
   }catch(e){}
   wire();
   // календарь в хедере сразу красный (feed активен)
-  switchTab('feed');
+  switchTab('feed', true);
   renderCalendarStrip();
   await loadData();
   renderCalendarStrip();
   applyFilter();
+  // deep-link на деталку: #/event/<slug>/
+  try{
+    const m = location.hash.match(/^#\/event\/([^\/]+)\/?$/);
+    if(m && m[1]){ openDetail(m[1], false); return; }
+  }catch(e){}
   const params=new URLSearchParams(location.search);
   const tab=params.get('tab')||params.get('vk_tab');
   if(tab==='map') switchTab('map');

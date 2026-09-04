@@ -292,3 +292,43 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .pl-map-emotions-toggle{display:flex !important}
 /* аватарка в попапе эмоций как на сайте + имя-ссылка на VK */
 .pl-map-emotion-pop__user-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+/* Detail page */
+.detail{max-width:640px;margin:0 auto;padding:0 0 32px}
+.detail__back{display:inline-flex;align-items:center;gap:8px;border:0;background:#f1f1f1;border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;margin:12px 0;color:#222;font-family:inherit}
+.detail__hero{position:relative;border-radius:20px;overflow:hidden;background:#f0f0f0;margin-top:4px}
+.detail__img{width:100%;height:300px;object-fit:cover;display:block}
+@media(min-width:768px){.detail__img{height:360px}}
+.detail__img--placeholder{height:160px;background:linear-gradient(135deg,#e8e8e8,#f5f5f5)}
+.detail__hero-overlay{position:absolute;inset:auto 0 0 0;padding:36px 16px 14px;background:linear-gradient(transparent,rgba(0,0,0,.62));color:#fff}
+.detail__title{font-size:21px;font-weight:700;line-height:1.25;margin:0}
+.detail__hero-meta{font-size:13px;opacity:.92;margin-top:4px}
+.detail__like{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.detail__like i{color:#ccc;font-size:17px}
+.detail__like.liked i{color:var(--red)}
+.detail__rating-badge{position:absolute;top:12px;left:12px;background:rgba(255,255,255,.95);padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.detail__rating-badge i{color:#ffc107}
+.detail__rating-badge.featured{background:#ffc107}
+.detail__rating-badge.featured i{color:#222}
+.detail__row{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:14px;color:#333;flex-wrap:wrap}
+.detail__row i{color:var(--red);width:16px;text-align:center}
+.detail__tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.detail__rating-line{display:flex;align-items:center;gap:10px;margin-top:12px;background:#fafafa;border:1px solid rgba(0,0,0,.06);border-radius:14px;padding:10px 12px}
+.detail__rating-val{font-weight:700;font-size:16px;display:inline-flex;align-items:center;gap:6px}
+.detail__rating-val i{color:#ffc107}
+.detail__likes{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:14px}
+.detail__likes button{width:36px;height:36px;border-radius:50%;border:0;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.detail__likes button i{color:#ccc;font-size:16px}
+.detail__likes button.liked i{color:var(--red)}
+.detail__actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.detail__actions .pl-btn{flex:1;min-width:140px;justify-content:center}
+.detail__desc{font-family:'IBM Plex Serif',serif;font-size:15px;line-height:1.65;color:#333;margin-top:16px;white-space:pre-line;word-break:break-word}
+.detail__desc a{color:var(--red);text-decoration:underline;text-underline-offset:2px}
+.detail__place{margin-top:16px;background:#fafafa;border:1px solid rgba(0,0,0,.06);border-radius:14px;padding:12px 14px;font-size:14px}
+.detail__place b{display:block;font-size:14px;margin-bottom:2px}
+.detail__place span{color:#666;font-size:13px}
+.detail__similar{margin-top:20px}
+.detail__similar h3{font-size:16px;margin:0 0 8px}
+.detail__site-link{margin-top:14px;text-align:center}
+.detail__site-link a{font-size:13px;color:#888;text-decoration:underline;text-underline-offset:2px}
+.detail__skeleton{padding:24px;text-align:center;color:#999}
