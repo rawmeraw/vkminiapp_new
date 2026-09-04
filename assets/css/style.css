@@ -320,7 +320,9 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail-ticket{display:inline-flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:12px 24px;border-radius:12px;background:linear-gradient(135deg,#e14425,#ff6b4a);color:#fff;font-weight:700;font-size:15px;box-shadow:0 4px 15px rgba(225,68,37,.4)}
 .detail-ticket i{font-size:17px}
 .detail-ticket img{width:20px;height:20px;object-fit:contain}
+.detail-ticket:hover{color:#fff}
 .detail-ticket--yandex{background:linear-gradient(135deg,#fc0,gold);color:#000}
+.detail-ticket--yandex:hover{color:#000}
 .detail-ticket--mts{background:linear-gradient(135deg,#e30611,#ff1f2a);color:#fff}
 .detail-ticket--mts img{filter:brightness(0) invert(1)}
 .detail-route--yandex{background:#fc0 !important;color:#000 !important;border-color:#fc0 !important}

@@ -874,11 +874,36 @@ function openSheet(c){
 function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverlay.classList.remove('sheet-overlay--show'); }
 
 // ---------- Detail page ----------
+// Порт темплейттегов enhanced_urlize + vk_urlize (extras.py) для описаний:
+// http(s)-ссылки, голые домены и вся VK-разметка [id123|Имя], [club123|...],
+// [https://vk.com/...|...], [wall-123_456|...]. vk.com и vk.ru — одно и то же,
+// нормализуем к https://vk.com/. VK-разметку обрабатываем первой, пока сырая.
 function linkify(s){
-  const t = esc(s||'');
-  return t
-    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
-    .replace(/\n/g, '<br>');
+  let t = esc(s||'');
+  // vk_urlize
+  t = t.replace(/\[<a[^>]*href="https?:\/\/vk\.(?:com|ru)\/(event|club|id|public)(\d+)[^"]*"[^>]*>https?:\/\/vk\.[^|]+\|([^<]+)<\/a>\s*([^\]]*)\]/g,
+    function(m, type, id, t1, t2){ return `<a href="https://vk.com/${type}${id}" target="_blank" rel="noopener">${(t1+' '+t2).trim()}</a>`; });
+  t = t.replace(/\[<a[^>]*href="https?:\/\/vk\.(?:com|ru)\/([a-zA-Z0-9_.]+)[^"]*"[^>]*>https?:\/\/vk\.[^|]+\|([^<]+)<\/a>\s*([^\]]*)\]/g,
+    function(m, user, t1, t2){ return `<a href="https://vk.com/${user}" target="_blank" rel="noopener">${(t1+' '+t2).trim()}</a>`; });
+  t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/(event|club|id|public)(\d+)\|(.+?)\]/g, '<a href="https://vk.com/$1$2" target="_blank" rel="noopener">$3</a>');
+  t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/([a-zA-Z0-9_.]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
+  t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/(wall-?\d+_\d+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
+  t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/([^|\]]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
+  t = t.replace(/\[(event|club|id|public)(\d+?)\|(.+?)\]/g, '<a href="https://vk.com/$1$2" target="_blank" rel="noopener">$3</a>');
+  t = t.replace(/\[([a-zA-Z0-9_.]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
+  // enhanced_urlize: готовые <a> прячем в плейсхолдеры, как на сайте
+  const held = [];
+  t = t.replace(/<a\s[^>]*>.*?<\/a>/gi, function(m){ held.push(m); return `\u0000${held.length-1}\u0000`; });
+  // http(s)-ссылки, текст ссылки без протокола
+  t = t.replace(/https?:\/\/[^\s<>"|\[\]]+/g, function(url){
+    return `<a href="${url}" target="_blank" rel="noopener">${url.replace(/^https?:\/\//, '')}</a>`;
+  });
+  // только что созданные <a> тоже прячем перед поиском голых доменов
+  t = t.replace(/<a\s[^>]*>.*?<\/a>/gi, function(m){ held.push(m); return `\u0000${held.length-1}\u0000`; });
+  // голые домены
+  t = t.replace(/\b[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?/g, '<a href="https://$&" target="_blank" rel="noopener">$&</a>');
+  t = t.replace(/\u0000(\d+)\u0000/g, function(m, i){ return held[+i]; });
+  return t.replace(/\n/g, '<br>');
 }
 function detailFromCache(slug){
   return state.concerts.find(c=>c.slug===slug) || state.detailCache[slug] || null;
