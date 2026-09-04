@@ -945,6 +945,24 @@ function wireDetailBack(){
   const b = document.getElementById('detail-back');
   if(b && !b._wired){ b._wired=true; b.onclick=()=>{ try{ history.back(); }catch(e){ closeDetail(); } setTimeout(()=>{ if(state.detailSlug) closeDetail(); }, 300); }; }
 }
+function ticketVendor(url){
+  // вендор билетной ссылки как на сайте (PostDetailView): прямые ссылки;
+  // короткие permlive.ru/XXXXXX резолвит только сервер
+  const u = String(url||'').toLowerCase();
+  const m = /erid=([^&\s]+)/.exec(u);
+  if(u.includes('afisha.yandex.ru') || (m && /^\d/.test(m[1]))) return 'yandex';
+  if(u.includes('cake.permlive.ru/go')) return 'mts';
+  if(u.includes('ticketland')) return 'ticketland';
+  return 'default';
+}
+function ticketBtnHTML(tickets, price){
+  const v = ticketVendor(tickets);
+  const priceSuffix = price===0 ? ' — Бесплатно' : (price ? ` от ${price}₽` : '');
+  if(v==='yandex') return `<a class="detail-ticket detail-ticket--yandex" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/yandex_afisha.svg" alt="Яндекс.Афиша"><span>Купить на Яндекс.Афише${price>0? ` от ${price}₽`:''}</span></a>`;
+  if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Купить на МТС Live${price>0? ` от ${price}₽`:''}</span></a>`;
+  if(v==='ticketland') return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить на Ticketland${esc(priceSuffix)}</span></a>`;
+  return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
+}
 function renderDetail(c, isFull){
   if(!c){
     els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Загрузка…</div>`;
@@ -954,7 +972,6 @@ function renderDetail(c, isFull){
   const dObj = c.date ? parseISO(c.date) : null;
   const dateStr = dObj ? `${fmtHeaderDate(dObj)}${c.time? ' в '+esc(c.time.slice(0,5)):''}` : '';
   const venue = esc(c.place_name||c.place?.name||'');
-  const priceStr = c.price===0 ? 'Вход свободный' : (c.price ? `от ${c.price}₽` : '');
   const ratingNum = parseFloat(c.cached_rating||0);
   const ratingVal = c.display_rating||c.cached_rating||'';
   const imgUrl = c.main_image || '';
@@ -962,11 +979,13 @@ function renderDetail(c, isFull){
   const badge = ratingVal ? `<div class="detail__rating-badge ${ratingNum>=5?'featured':''}"><i class="fa-solid fa-star"></i> ${esc(ratingVal)}</div>` : '';
   const heart = state.hasAccount
     ? `<button class="detail__like${state.likedIds[c.id]?' liked':''}" data-id="${c.id}" aria-label="Лайк"><i class="fa-solid fa-heart"></i></button>` : '';
-  const tags = (c.tags||[]).map(t=>`<span class="tag">${esc(t.name)}</span>`).join('');
+  const tags = (c.tags||[]).map((t,i)=>`<span class="detail-tag" data-type="${esc((t.type||'other').toLowerCase())}" data-index="${i%4}">${esc(t.name)}</span>`).join('');
   const coords = c.place?.coordinates || '';
   const routeHref = coords ? `https://yandex.ru/maps/?rtext=~${esc(coords)}` : '';
-  const addr = c.place?.address ? esc(c.place.address) : '';
   const tickets = c.tickets || '';
+  // цену в строке инфо показываем только когда нет ссылки на билеты (иначе она в кнопке)
+  const pricePart = !tickets ? (c.price===0 ? ' › Бесплатно' : (c.price ? ` › ${c.price}₽` : '')) : '';
+  const infoStr = [dateStr||'Дата уточняется', venue||''].filter(Boolean).join(' › ') + pricePart;
   const srcLink = c.link || '';
   const similar = (c.similar||[]).filter(s=>s.slug!==c.slug).slice(0,10);
   els.detailContent.innerHTML = `
@@ -974,27 +993,16 @@ function renderDetail(c, isFull){
     <div class="detail__hero">${heroImg}${badge}${heart}
       <div class="detail__hero-overlay">
         <h1 class="detail__title">${esc(c.title)}</h1>
-        <div class="detail__hero-meta">${esc(dateStr)}${venue? ' · '+venue:''}</div>
+        <div class="detail__hero-info">${esc(infoStr)}</div>
+        ${tags? `<div class="detail__hero-tags">${tags}</div>`:''}
+        ${tickets? ticketBtnHTML(tickets, c.price):''}
       </div>
     </div>
-    <div class="detail__row"><i class="fas fa-calendar"></i><span>${esc(dateStr)||'Дата уточняется'}</span></div>
-    <div class="detail__row"><i class="fas fa-location-dot"></i><span>${venue||'Площадка уточняется'}${addr? ' · '+addr:''}${priceStr? ' · '+esc(priceStr):''}</span></div>
-    ${tags? `<div class="detail__tags">${tags}</div>`:''}
-    <div class="detail__rating-line">
-      <span class="detail__rating-val"><i class="fa-solid fa-star"></i> ${esc(ratingVal||'—')}</span>
-      ${c.is_paid? '<span class="tag">★ Топ</span>':''}
-      <span class="detail__likes">
-        <span id="detail-likes-hint">${state.hasAccount? '':''}</span>
-        ${state.hasAccount? `<button class="detail__like-btn${state.likedIds[c.id]?' liked':''} card-like" data-id="${c.id}" aria-label="Лайк"><i class="fa-solid fa-heart"></i></button>`:''}
-      </span>
-    </div>
     <div class="detail__actions">
-      ${tickets? `<a class="pl-btn" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i> Купить билет${c.price? ' · '+c.price+'₽':''}</a>`:''}
-      ${routeHref? `<a class="pl-btn pl-btn--secondary" href="${routeHref}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Маршрут</a>`:''}
+      ${routeHref? `<a class="pl-btn detail-route--yandex" href="${routeHref}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Маршрут</a>`:''}
       <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
     </div>
     ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
-    ${venue? `<div class="detail__place"><b>${venue}</b>${addr? `<span>${addr}</span>`:''}</div>`:''}
     ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
       : `<div class="detail__site-link"><a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
     ${similar.length? `<div class="detail__similar"><h3>Похожие концерты</h3><div class="horizontal-slider-row">${similar.map(s=>cardHTML(s,{mode:'similar'})).join('')}</div></div>`:''}
