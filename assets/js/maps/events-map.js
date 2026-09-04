@@ -2120,7 +2120,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var filterDefs = [
             { key: 'live', label: 'Live', cls: 'pl-map-filter-btn--live', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
             { key: 'pop', label: 'Pop', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-microphone" aria-hidden="true"></i>' },
-            { key: 'classic', label: 'Classic', cls: 'pl-map-filter-btn--classic', icon: '<span aria-hidden="true" style="font-size:18px;line-height:1">🎻</span>' }
+            { key: 'classic', label: 'Classic', cls: 'pl-map-filter-btn--classic', icon: '<svg viewBox="0 0 24 26" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M12 .7a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm0 .9a.6.6 0 110 1.2.6.6 0 010-1.2z"/><rect x="11.2" y="2.5" width="1.6" height="2" rx=".5"/><rect x="10.4" y="3" width=".8" height=".5" rx=".25"/><rect x="12.8" y="3" width=".8" height=".5" rx=".25"/><path d="M11.35 4.4h1.3l.3 5.4h-1.9z"/><path d="M12 9.8C10.1 9.8 8.3 11.2 8.3 13c0 1.4.9 2.3 1.7 2.9-.5.5-.5 1.2 0 1.7-1.2.7-2.3 1.9-2.3 3.1 0 1.4 2 2.3 4.3 2.3s4.3-.9 4.3-2.3c0-1.2-1.1-2.4-2.3-3.1.5-.5.5-1.2 0-1.7.8-.6 1.7-1.5 1.7-2.9 0-1.8-1.8-3.2-3.7-3.2z"/><path d="M11.05 9.8h1.9l.45 7h-2.8z"/><path d="M11.15 17.9h1.7l.5 2.5c.1.5-.3 1-.9 1h-.9c-.6 0-1-.5-.9-1z"/><rect x="11.78" y="22.9" width=".44" height="2.6" rx=".22"/></svg>' }
         ];
         for (var fi = 0; fi < filterDefs.length; fi++) {
             (function (def) {
