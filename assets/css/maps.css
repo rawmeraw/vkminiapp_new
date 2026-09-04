@@ -1313,6 +1313,82 @@ body.pl-map-fs #map {
     color: #999;
 }
 
+.pl-map-emotion-pop__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+
+.pl-map-emotion-pop__like {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 20px;
+    background: #fff;
+    color: #999;
+    font-family: 'Jost', Arial, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.pl-map-emotion-pop__like i {
+    font-size: 0.9rem;
+}
+
+.pl-map-emotion-pop__like:hover {
+    border-color: #e14425;
+    color: #e14425;
+}
+
+.pl-map-emotion-pop__like.is-liked {
+    background: #e14425;
+    border-color: #e14425;
+    color: #fff;
+}
+
+.pl-map-emotion-pop__like:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.pl-map-emotion-pop__like.liked-burst {
+    animation: pl-emotion-like-burst 0.38s ease;
+}
+
+@keyframes pl-emotion-like-burst {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+.pl-map-emotion__likes-badge {
+    position: absolute;
+    bottom: -4px;
+    left: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 10px;
+    background: #e14425;
+    color: #fff;
+    font-family: 'Jost', Arial, sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
 .pl-map-emotion-pop__delete {
     display: block;
     width: 100%;

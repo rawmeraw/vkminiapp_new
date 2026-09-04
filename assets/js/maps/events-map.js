@@ -921,6 +921,41 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return Math.max(0, Math.min(1, (end - Date.now()) / EMOTION_LIFE_MS));
     }
 
+    function emotionLikesCount(em) {
+        var n = parseInt(em && (em.likes_count || 0), 10);
+        return isNaN(n) || n < 0 ? 0 : n;
+    }
+
+    function emotionMarkerSize(em) {
+        return 40 + Math.min(emotionLikesCount(em), 10) * 3;
+    }
+
+    function emotionEmojiSize(em) {
+        return 20 + Math.min(emotionLikesCount(em), 10) * 1.5;
+    }
+
+    function applyEmotionSize(markerEl, em) {
+        if (!markerEl || !em) return;
+        var s = emotionMarkerSize(em);
+        markerEl.style.width = s + 'px';
+        markerEl.style.height = s + 'px';
+        var emojiEl = markerEl.querySelector('.pl-map-emotion__emoji');
+        if (emojiEl) emojiEl.style.fontSize = emotionEmojiSize(em) + 'px';
+        var badge = markerEl.querySelector('.pl-map-emotion__likes-badge');
+        var n = emotionLikesCount(em);
+        if (n > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'pl-map-emotion__likes-badge';
+                markerEl.appendChild(badge);
+            }
+            badge.textContent = '❤ ' + n;
+            badge.style.display = '';
+        } else if (badge) {
+            badge.style.display = 'none';
+        }
+    }
+
     function findEmotionEl(id) {
         if (!state.mapEl) return null;
         return state.mapEl.querySelector('.pl-map-emotion[data-id="em' + id + '"]');
@@ -941,6 +976,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             markerEl.appendChild(el('span', 'pl-map-emotion__user-label', escapeHtml(em.user)));
         }
         markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
+        applyEmotionSize(markerEl, em);
         return markerEl;
     }
 
@@ -1019,6 +1055,11 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         pop.addEventListener('click', function (e) {
             var t = e.target;
             if (!t || !t.classList) return;
+            var likeBtn = t.closest ? t.closest('.pl-map-emotion-pop__like') : null;
+            if (likeBtn) {
+                toggleEmotionLike(pop.__em, likeBtn);
+                return;
+            }
             if (t.classList.contains('pl-map-balloon__close')) hideEmotionPop();
             else if (t.classList.contains('pl-map-emotion-pop__delete')) {
 
@@ -1053,11 +1094,99 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '</div>' +
             (em.text ? '<p class="pl-map-emotion-pop__text">' + escapeHtml(em.text) + '</p>' : '') +
             '<p class="pl-map-emotion-pop__meta">' + relativeTime(em.created_at) + '</p>' +
+            '<div class="pl-map-emotion-pop__actions">' +
+            '<button type="button" class="pl-map-emotion-pop__like' + (em.liked ? ' is-liked' : '') + '" aria-label="Поставить лайк">' +
+            '<i class="fa-solid fa-heart" aria-hidden="true"></i>' +
+            '<span class="pl-map-emotion-pop__like-count">' + emotionLikesCount(em) + '</span></button>' +
+            '</div>' +
             delBtn;
         emotionPopEl.classList.add('pl-map-balloon--open');
         attachSwipeClose(emotionPopEl, hideEmotionPop);
         positionEmotionPop(markerEl);
         state.emotionOpenId = em.id;
+    }
+
+    function refreshEmotionLikeUI(em) {
+        var markerEl = findEmotionEl(em.id);
+        if (markerEl) {
+            applyEmotionSize(markerEl, em);
+            markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
+        }
+        if (emotionPopEl && state.emotionOpenId === em.id) {
+            var btn = emotionPopEl.querySelector('.pl-map-emotion-pop__like');
+            if (btn) {
+                btn.classList.toggle('is-liked', !!em.liked);
+                var cnt = btn.querySelector('.pl-map-emotion-pop__like-count');
+                if (cnt) cnt.textContent = emotionLikesCount(em);
+            }
+        }
+    }
+
+    function toggleEmotionLike(em, btn) {
+        if (!em) return;
+        /* VKMINI: лайк через VK-эндпоинт */
+        try {
+            var vkd = window.PermLiveMapVk;
+            if (vkd && vkd.vk_user_id) {
+                if (btn) btn.disabled = true;
+                fetch('/api/vk/emotion/' + String(em.id) + '/like/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ vk_user_id: vkd.vk_user_id, vk_params: vkd.vk_params || undefined })
+                }).then(function (r) {
+                    return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+                }).then(function (res) {
+                    if (!res.ok) {
+                        showToast((res.d && res.d.error) || 'Не удалось поставить лайк');
+                        return;
+                    }
+                    em.liked = !!res.d.liked;
+                    em.likes_count = res.d.likes_count || 0;
+                    if (res.d.expires_at) em.expires_at = res.d.expires_at;
+                    refreshEmotionLikeUI(em);
+                    if (btn && em.liked) {
+                        btn.classList.remove('liked-burst');
+                        void btn.offsetWidth;
+                        btn.classList.add('liked-burst');
+                        setTimeout(function () { btn.classList.remove('liked-burst'); }, 400);
+                    }
+                    if (em.liked) showToast('Эмоция продлена на час');
+                }).catch(function () {
+                    showToast('Сеть недоступна, попробуйте ещё раз');
+                }).then(function () {
+                    if (btn) btn.disabled = false;
+                });
+                return;
+            }
+        } catch (e) {}
+        if (!ME.is_auth) {
+            showToast('Войдите в профиль, чтобы ставить лайки');
+            return;
+        }
+        if (btn) btn.disabled = true;
+        fetch('/api/map-emotions/' + String(em.id) + '/like/', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': (window.PermLiveMapData && window.PermLiveMapData.csrf) || ''
+            }
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                showToast((res.d && res.d.error) || 'Не удалось поставить лайк');
+                return;
+            }
+            em.liked = !!res.d.liked;
+            em.likes_count = res.d.likes_count || 0;
+            if (res.d.expires_at) em.expires_at = res.d.expires_at;
+            refreshEmotionLikeUI(em);
+            if (em.liked) showToast('Эмоция продлена на час');
+        }).catch(function () {
+            showToast('Сеть недоступна, попробуйте ещё раз');
+        }).then(function () {
+            if (btn) btn.disabled = false;
+        });
     }
 
     function deleteEmotion(em) {
