@@ -1012,7 +1012,7 @@ function renderDetail(c, isFull){
   const pricePart = !tickets ? (c.price===0 ? ' › Бесплатно' : (c.price ? ` › ${c.price}₽` : '')) : '';
   const infoStr = [dateStr||'Дата уточняется', venue||''].filter(Boolean).join(' › ') + pricePart;
   const srcLink = c.link || '';
-  const similar = (c.similar||[]).filter(s=>s.slug!==c.slug).slice(0,10);
+  const similar = (c.similar||[]).filter(s=>s.slug!==c.slug && (!s.date || s.date>=state.todayISO)).slice(0,10);
   els.detailContent.innerHTML = `
     <button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button>
     <div class="detail__hero">${heroImg}${badge}${heart}
