@@ -1558,13 +1558,77 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         }
     }
 
+    function closeSiteOverlays() {
+        var closed = false;
+        try {
+            if (typeof window.__plMapSiteCloseOverlays === 'function') {
+                if (window.__plMapSiteCloseOverlays()) closed = true;
+            }
+        } catch (e) {}
+        try {
+            var roots = [];
+            if (state.mapEl && state.mapEl.querySelector) roots.push(state.mapEl);
+            roots.push(document);
+            var dd = null, mb = null, cm = null, co = null, db = null;
+            for (var ri = 0; ri < roots.length; ri++) {
+                var root = roots[ri];
+                if (!dd) dd = root.querySelector('.pl-map-mode-dropdown--open');
+                if (!mb) mb = root.querySelector('.pl-map-mode-btn--open');
+                if (!cm) cm = root.querySelector('.pl-map-calendar-modal--open');
+                if (!co) co = root.querySelector('.pl-map-calendar-overlay--show');
+                if (!db) db = root.querySelector('.pl-map-date-btn--open');
+            }
+            if (dd) { dd.classList.remove('pl-map-mode-dropdown--open'); closed = true; }
+            if (mb) { mb.classList.remove('pl-map-mode-btn--open'); closed = true; }
+            if (cm) {
+                cm.classList.remove('pl-map-calendar-modal--open');
+                try { cm.setAttribute('aria-hidden', 'true'); } catch (e2) {}
+                closed = true;
+            }
+            if (co) { co.classList.remove('pl-map-calendar-overlay--show'); closed = true; }
+            if (db && cm) { db.classList.remove('pl-map-date-btn--open'); }
+        } catch (e) {}
+        return closed;
+    }
+
+    function closeMapPopups() {
+        var any = false;
+        if (state.balloonOpenId) { closeBalloon(); any = true; }
+        if (emotionOpenId && emotionPopEl && emotionPopEl.parentNode) { hideEmotionPop(); any = true; }
+        if (isFlowerOpen()) { hideFlower(); any = true; }
+        if (state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open')) { hideProposeComposer(); any = true; }
+        if (window.__PermLiveMapEmotionOpen) { hideEmotionComposer(); any = true; }
+        clearFlowerTap();
+        return any;
+    }
+
+    function getMapZoom(fallback) {
+        try {
+            var m = state.map;
+            if (!m) return fallback;
+            if (typeof m.getZoom === 'function') return m.getZoom();
+            if (typeof m.zoom === 'number') return m.zoom;
+            if (m.camera && typeof m.camera.zoom === 'number') return m.camera.zoom;
+        } catch (e) {}
+        return fallback;
+    }
+
+    function changeZoomBy(delta) {
+        if (!state.map || !state.map.setLocation) return;
+        var cur = getMapZoom(14);
+        if (typeof cur !== 'number' || isNaN(cur)) cur = 14;
+        var nz = Math.max(4, Math.min(19, cur + delta));
+        try { state.map.setLocation({ zoom: nz, duration: 200 }); } catch (e) {}
+    }
+
     function isMapUI(e) {
         var t = document.elementFromPoint(e.clientX, e.clientY);
         if (!t || !t.closest) return false;
         if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion, .pl-map-balloon, ' +
             '.pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
             '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
-            '.pl-map-date-btn, .pl-map-controls, .pl-map-calendar-modal, .pl-map-calendar-overlay')) return true;
+            '.pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, ' +
+            '.pl-map-controls, .pl-map-calendar-modal, .pl-map-calendar-overlay')) return true;
 
         if (t.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]')) return true;
 
@@ -2088,6 +2152,20 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             setEmotionsVisible(on);
         });
         controls.appendChild(emoBtn);
+
+        var zoomIn = el('button', 'pl-map-control-btn pl-map-zoom-btn pl-map-zoom-btn--in', '<i class="fas fa-plus" aria-hidden="true"></i>');
+        zoomIn.type = 'button';
+        zoomIn.title = 'Приблизить';
+        zoomIn.setAttribute('aria-label', 'Приблизить карту');
+        zoomIn.addEventListener('click', function () { changeZoomBy(1); });
+        controls.appendChild(zoomIn);
+
+        var zoomOut = el('button', 'pl-map-control-btn pl-map-zoom-btn pl-map-zoom-btn--out', '<i class="fas fa-minus" aria-hidden="true"></i>');
+        zoomOut.type = 'button';
+        zoomOut.title = 'Отдалить';
+        zoomOut.setAttribute('aria-label', 'Отдалить карту');
+        zoomOut.addEventListener('click', function () { changeZoomBy(-1); });
+        controls.appendChild(zoomOut);
         syncFilterButtons();
 
         return controls;
@@ -2284,6 +2362,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         });
         state.map = map;
         window.Perm = map;
+        try { window.PermLiveMaps._map = map; } catch (e) {}
 
         state.YMapDefaultSchemeLayer = ymaps3.YMapDefaultSchemeLayer;
         state.YMapClusterer = YMapClusterer;
@@ -2299,10 +2378,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.clusterer = createClusterer();
         map.addChild(state.clusterer);
 
-        var ControlsCls = YMapControls || ymaps3.YMapControls;
-        var zoomControls = new ControlsCls({ position: 'right' });
-        zoomControls.addChild(new YMapZoomControl());
-        map.addChild(zoomControls);
+        /* Зум — свои кнопки +/- в общем вертикальном ряду справа
+           (как в мини-приложении); штатный YMapZoomControl не используем,
+           чтобы не было дубля. На всякий случай прячем его и через CSS. */
 
         state.balloonEl = buildBalloon();
         attachSwipeClose(state.balloonEl, closeBalloon);
@@ -2457,7 +2535,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (!target || !target.closest) return;
 
             if (target.closest && (
-                target.closest('.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-calendar-modal, .pl-map-calendar-overlay') ||
+                target.closest('.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-calendar-modal, .pl-map-calendar-overlay') ||
                 target.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]') ||
                 (target.closest('#map button, #map a') && !target.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion'))
             )) return;
@@ -2467,12 +2545,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var wasFlower = isFlowerOpen();
             var wasPropose = !!(state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open'));
             var wasComposer = !!(window.__PermLiveMapEmotionOpen);
+            var wasSiteUI = closeSiteOverlays();
             if (wasFlower) hideFlower();
             if (wasPropose) hideProposeComposer();
             if (wasEmotionPop) hideEmotionPop();
             if (wasComposer) hideEmotionComposer();
             if (wasBalloon) closeBalloon();
-            if (wasBalloon || wasEmotionPop || wasFlower || wasPropose || wasComposer) {
+            if (wasBalloon || wasEmotionPop || wasFlower || wasPropose || wasComposer || wasSiteUI) {
                 clearFlowerTap();
                 return;
             }
@@ -2501,11 +2580,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var wasEmotionPop2 = !!(emotionOpenId && emotionPopEl && emotionPopEl.parentNode);
             var wasFlower2 = isFlowerOpen();
             var wasPropose2 = !!(state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open'));
+            var wasSiteUI2 = closeSiteOverlays();
             if (wasFlower2) hideFlower();
             if (wasPropose2) hideProposeComposer();
             if (wasEmotionPop2) hideEmotionPop();
             if (wasBalloon2) closeBalloon();
-            if (wasBalloon2 || wasEmotionPop2 || wasFlower2 || wasPropose2) return;
+            if (wasBalloon2 || wasEmotionPop2 || wasFlower2 || wasPropose2 || wasSiteUI2) return;
             var ll2 = screenToLngLat(e.clientX, e.clientY);
             if (ll2) showFlower(ll2, e.clientX, e.clientY);
         }, true);
@@ -2665,6 +2745,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     window.PermLiveMaps.getTypeAvailability = getTypeAvailability;
     window.PermLiveMaps.getModeAvailability = getModeAvailability;
     window.PermLiveMaps.syncFilterVisibility = syncFilterVisibility;
+    window.PermLiveMaps.closePopups = closeMapPopups;
 
     window.PermLiveMaps.balloonImgError = function (img) {
         if (!img) return;

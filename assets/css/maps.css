@@ -1687,7 +1687,7 @@ body.pl-map-fs #map {
     line-height: 1.35;
     text-align: center;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    z-index: 10001;
+    z-index: 10030;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
@@ -1709,7 +1709,7 @@ body.pl-map-fs #map {
     position: absolute;
     inset: 0;
     background: rgba(15, 18, 24, 0.12);
-    z-index: 10001;
+    z-index: 10020;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s ease, visibility 0.2s ease;
@@ -1726,7 +1726,7 @@ body.pl-map-fs #map {
     top: 0;
     width: 0;
     height: 0;
-    z-index: 10002;
+    z-index: 10021;
     pointer-events: none;
 }
 
