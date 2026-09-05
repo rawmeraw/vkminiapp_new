@@ -146,6 +146,8 @@ const state = {
   detailSlug: null,
   detailCache: {},
   prevView: 'feed',
+  fullLoaded: false,
+  upcomingTotalCache: 0,
 };
 
 async function fetchJSON(url){
@@ -169,17 +171,55 @@ function cachedFetch(key, url, ttlMs){
   });
 }
 
+function rebuildPools(){
+  const future = state.concerts.filter(c => c.date >= state.todayISO);
+  // топ-10 как на сайте: сначала is_paid, затем uncapped cached_rating, затем дата
+  state.top10Pool = [...future].sort((a,b)=>{
+    const paid = (Number(!!b.is_paid) - Number(!!a.is_paid));
+    if(paid!==0) return paid;
+    const r = parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0);
+    if(r!==0) return r;
+    return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
+  }).slice(0, 30);
+  state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.map(c => c.date));
+}
+
+// Полный пул (500) — только для счётчика, таймлайнов и фильтров; идёт фоном после first paint
+async function fillFullPool(seen){
+  try{
+    const fullRes = await cachedFetch('pl2_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=500&short=1`, 10*60*1000);
+    const results = fullRes && Array.isArray(fullRes.results) ? fullRes.results : (Array.isArray(fullRes) ? fullRes : []);
+    let added=false;
+    for(const c of results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title)){
+      if(!seen.has(c.slug)){ seen.add(c.slug); state.concerts.push(c); added=true; }
+    }
+    if(added || !state.fullLoaded) rebuildPools();
+    state.fullLoaded=true;
+    // счётчик «Смотреть все N» кэшируем на день — покажем мгновенно при следующем визите
+    state.upcomingTotalCache=state.upcomingPool.length;
+    try{ localStorage.setItem('pl2_total_'+state.todayISO, JSON.stringify({t:Date.now(), v:state.upcomingPool.length})); }catch(e){}
+    try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('full paint failed', e); }
+  }catch(e){ console.warn('full pool failed', e); }
+  return true;
+}
+
 async function loadData(){
-  // календарь + вся афиша в лёгком short-формате + топ по рейтингу
+  // Фаза 1 — лёгкая (~0.3-0.8с): календарь + 12 ближайших + топ-30. Этого хватает на first paint.
   const [calRes, byDateRes, byRatingRes] = await Promise.allSettled([
     cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 60*60*1000),
-    cachedFetch('pl2_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=500&short=1`, 10*60*1000),
+    cachedFetch('pl_first_'+state.todayISO, `${API_BASE}/api/concerts/?limit=12&short=1`, 10*60*1000),
     cachedFetch('pl2_top_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30&order=rating&short=1`, 10*60*1000),
   ]).then(rs => rs.map(r => r.status === 'fulfilled' ? r.value : null));
   if(calRes && Array.isArray(calRes.dates)){
     state.datesWithEvents = new Set(calRes.dates);
     if(calRes.today) state.todayISO = calRes.today;
   }
+  // счётчик из кэша — покажем сразу, точное значение приедет с полным пулом
+  try{
+    const raw=localStorage.getItem('pl2_total_'+state.todayISO);
+    if(raw){ const o=JSON.parse(raw); if(o && o.v) state.upcomingTotalCache=o.v; }
+  }catch(e){}
   const toList = (api) => {
     const results = api && Array.isArray(api.results) ? api.results : (Array.isArray(api) ? api : []);
     return results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title);
@@ -201,19 +241,11 @@ async function loadData(){
     }
   }
   state.concerts = pool;
-  if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.map(c => c.date));
-  const future = state.concerts.filter(c => c.date >= state.todayISO);
-  // топ-10 как на сайте: сначала is_paid, затем uncapped cached_rating, затем дата
-  state.top10Pool = [...future].sort((a,b)=>{
-    const paid = (Number(!!b.is_paid) - Number(!!a.is_paid));
-    if(paid!==0) return paid;
-    const r = parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0);
-    if(r!==0) return r;
-    return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
-  }).slice(0, 30);
-  state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
-  // Первый paint сразу — не ждём VK bridge + рекомендации (они медленные, докрасим ниже)
+  rebuildPools();
+  // Первый paint сразу — не ждём полный пул (500), VK bridge и рекомендации
   try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('early paint failed', e); }
+  // Фаза 2 — полный пул фоном: точный счётчик, таймлайны, фильтры по датам/поиск
+  await fillFullPool(seen);
   // VK рекомендации — если пользователь привязан через allauth.
   // LaunchParams берём первыми: в них vk_user_id + sign для подписи лайков.
   try{
@@ -665,7 +697,7 @@ function renderSliders(){
     els.top10TitleLink.style.cursor='default';
     els.top10TitleLink.removeAttribute('href');
     if(els.top10Badge) els.top10Badge.style.display='none';
-    const upcomingTotal = state.upcomingPool.length;
+    const upcomingTotal = state.fullLoaded ? state.upcomingPool.length : (state.upcomingTotalCache || state.upcomingPool.length);
     renderSlider(els.sliderUpcoming, els.upcomingRow, state.upcomingPool, upcomingTotal, 'upcoming', 'Ближайшие');
     els.upcomingTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
     els.upcomingBadge.onclick=(e)=>{e.preventDefault(); openTimeline('upcoming')};
@@ -1697,27 +1729,30 @@ function wire(){
 }
 
 (async function boot(){
-  try{
-    const cfg = await bridge.send('VKWebAppGetConfig');
-    if(cfg && cfg.insets){
-      document.documentElement.style.setProperty('--vk-inset-top', (cfg.insets.top||0)+'px');
-      document.documentElement.style.setProperty('--vk-inset-bottom', (cfg.insets.bottom||0)+'px');
-    }
-    bridge.subscribe(function(e){
-      if(e.detail && e.detail.type==='VKWebAppUpdateConfig'){
-        const ins=e.detail.data && e.detail.data.insets;
-        if(ins){
-          document.documentElement.style.setProperty('--vk-inset-top', (ins.top||0)+'px');
-          document.documentElement.style.setProperty('--vk-inset-bottom', (ins.bottom||0)+'px');
-        }
-      }
-    });
-  }catch(e){}
   wire();
   // календарь в хедере сразу красный (feed активен)
   switchTab('feed', true);
   renderCalendarStrip();
   renderSliderSkeletons();
+  // insets VK — в фоне, first paint их не ждёт
+  (async()=>{
+    try{
+      const cfg = await bridge.send('VKWebAppGetConfig');
+      if(cfg && cfg.insets){
+        document.documentElement.style.setProperty('--vk-inset-top', (cfg.insets.top||0)+'px');
+        document.documentElement.style.setProperty('--vk-inset-bottom', (cfg.insets.bottom||0)+'px');
+      }
+      bridge.subscribe(function(e){
+        if(e.detail && e.detail.type==='VKWebAppUpdateConfig'){
+          const ins=e.detail.data && e.detail.data.insets;
+          if(ins){
+            document.documentElement.style.setProperty('--vk-inset-top', (ins.top||0)+'px');
+            document.documentElement.style.setProperty('--vk-inset-bottom', (ins.bottom||0)+'px');
+          }
+        }
+      });
+    }catch(e){}
+  })();
   await loadData();
   renderCalendarStrip();
   applyFilter();
