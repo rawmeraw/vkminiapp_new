@@ -212,6 +212,8 @@ async function loadData(){
     return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
   }).slice(0, 30);
   state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  // Первый paint сразу — не ждём VK bridge + рекомендации (они медленные, докрасим ниже)
+  try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('early paint failed', e); }
   // VK рекомендации — если пользователь привязан через allauth.
   // LaunchParams берём первыми: в них vk_user_id + sign для подписи лайков.
   try{
@@ -695,6 +697,13 @@ function renderSlider(slider, row, list, total, type, title){
   const hasMore = !isTop10 && total>10;
   const visible = list.slice(0,10);
   row.innerHTML = visible.map((c,i)=> cardHTML(c, isTop10?{rank:i+1,mode:type}:{mode:type})).join('') || '<p style="padding:12px;color:#999">Нет событий</p>';
+  // первые карточки — без lazy: мобильный ~2, десктоп ~5 (быстрый first paint)
+  try{
+    const eagerN = window.innerWidth>=768 ? 5 : 2;
+    row.querySelectorAll('img.card-img').forEach((img,i)=>{
+      if(i<eagerN){ img.loading='eager'; img.setAttribute('fetchpriority','high'); }
+    });
+  }catch(e){}
   const badge = slider.querySelector('.section-count-badge');
   if(badge){
     if(isTop10){
@@ -730,6 +739,26 @@ function bindSliderArrows(slider){
   row.addEventListener('scroll', upd); upd();
   left.onclick=()=> row.scrollBy({left:-260,behavior:'smooth'});
   right.onclick=()=> row.scrollBy({left:260,behavior:'smooth'});
+}
+
+// Скелетоны до загрузки данных — видно, что контент едет (shimmer)
+function skeletonHTML(){
+  return `<div class="concert-card card-skeleton" aria-hidden="true">
+    <div class="card-img-wrapper"></div>
+    <div class="card-info">
+      <div class="card-skeleton__line" style="width:85%"></div>
+      <div class="card-skeleton__line" style="width:60%"></div>
+      <div class="card-skeleton__line" style="width:40%"></div>
+    </div>
+  </div>`;
+}
+function renderSliderSkeletons(){
+  try{
+    const n = window.innerWidth>=768 ? 6 : 3;
+    const html = new Array(n).fill(skeletonHTML()).join('');
+    if(els.top10Row) els.top10Row.innerHTML = html;
+    if(els.upcomingRow) els.upcomingRow.innerHTML = html;
+  }catch(e){}
 }
 
 // Timeline — only when timelineMode active
@@ -1688,6 +1717,7 @@ function wire(){
   // календарь в хедере сразу красный (feed активен)
   switchTab('feed', true);
   renderCalendarStrip();
+  renderSliderSkeletons();
   await loadData();
   renderCalendarStrip();
   applyFilter();

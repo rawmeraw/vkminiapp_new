@@ -178,6 +178,12 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .calendar-date--empty{opacity:.35;cursor:not-allowed;background:#f0f0f0!important;color:#999!important}
 .calendar-date--empty .calendar-date__wd{color:#bbb!important}
 .section-count-badge{cursor:pointer}
+/* Skeleton-заглушки слайдеров — видны до первой отрисовки реальных карточек */
+.card-skeleton{pointer-events:none;user-select:none}
+.card-skeleton .card-img-wrapper{background:linear-gradient(100deg,#e9e9e9 40%,#f6f6f6 50%,#e9e9e9 60%);background-size:200% 100%;animation:pl-skeleton 1.2s linear infinite}
+.card-skeleton .card-info{background:#f1f1f1}
+.card-skeleton__line{height:10px;border-radius:6px;background:linear-gradient(100deg,#e2e2e2 40%,#f4f4f4 50%,#e2e2e2 60%);background-size:200% 100%;animation:pl-skeleton 1.2s linear infinite}
+@keyframes pl-skeleton{from{background-position:200% 0}to{background-position:-200% 0}}
 
 /* Timeline */
 .timeline-wrap{margin-top:8px}
@@ -254,11 +260,11 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .leaflet-popup-content{margin:12px 14px;line-height:1.4}
 .leaflet-popup-content b{font-size:14px}
 
-/* Desktop map width like main page — centered 1120, mobile full width */
+/* Desktop map — на весь экран как на мобильном (во всю ширину вьюпорта и высоту до низа экрана) */
 @media (min-width: 768px){
-  #view-map{max-width:1120px;margin:0 auto;padding:0 16px}
-  #view-map #map{position:relative !important;top:auto !important;left:auto !important;width:100% !important;height:600px !important;border-radius:12px;overflow:visible;box-shadow:0 2px 12px rgba(0,0,0,.08)}
-  #view-map #map > ymaps, #view-map #map > div:not([class*="pl-map-"]){border-radius:12px;overflow:hidden}
+  #view-map{max-width:none;width:100vw;margin-left:calc(-50vw + 50%);padding:0;margin-bottom:-24px}
+  #view-map #map{position:absolute !important;inset:0 !important;width:100% !important;height:100% !important;border-radius:0;overflow:hidden;box-shadow:none}
+  #view-map #map > ymaps, #view-map #map > div:not([class*="pl-map-"]){border-radius:0;overflow:hidden}
 }
 @media (max-width:767px){
   #view-map{padding:0}
