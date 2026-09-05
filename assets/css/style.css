@@ -262,14 +262,19 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 
 /* Desktop map — на весь экран как на мобильном (во всю ширину вьюпорта и высоту до низа экрана) */
 @media (min-width: 768px){
-  #view-map{max-width:none;width:100vw;margin-left:calc(-50vw + 50%);padding:0;margin-bottom:-24px}
+  #view-map{max-width:none;width:100vw;margin-left:calc(-50vw + 50%);padding:0}
   #view-map #map{position:absolute !important;inset:0 !important;width:100% !important;height:100% !important;border-radius:0;overflow:hidden;box-shadow:none}
   #view-map #map > ymaps, #view-map #map > div:not([class*="pl-map-"]){border-radius:0;overflow:hidden}
 }
 @media (max-width:767px){
   #view-map{padding:0}
   #view-map #map{border-radius:0}
+  /* низ карты — ровно к верху футера, а не под него */
+  #view-map{min-height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom) - var(--tabbar-h));height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom) - var(--tabbar-h))}
 }
+/* Вкладка карты: скролл страницы заблокирован — хедер всегда на месте, карта от хедера до футера */
+body.map-tab-open{overflow:hidden !important;overscroll-behavior:none}
+body.map-tab-open #app{padding-bottom:0}
 #view-map .pl-map-date-btn,
 #view-map .pl-map-mode-btn{z-index:10002 !important;display:inline-flex !important;visibility:visible !important;opacity:1 !important}
 #view-map .pl-map-mode-dropdown{z-index:10003 !important}

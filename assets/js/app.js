@@ -1459,6 +1459,22 @@ async function loadMapForDate(iso){
   }
 }
 
+function goHome(){
+  try{ closeSheet(); }catch(e){}
+  try{ closeCalendar(); }catch(e){}
+  if(state.detailSlug) closeDetail(false);
+  state.range=null;
+  state.selectedDate=null;
+  state.timelineMode=null;
+  state.query='';
+  if(els.searchInput){ els.searchInput.value=''; const sc=$('#search-clear'); if(sc) sc.style.display='none'; }
+  try{ renderCalendarStrip(); }catch(e){}
+  switchTab('feed');
+  try{ applyFilter(); }catch(e){}
+  try{ history.pushState({}, '', location.pathname + location.search); }catch(e){}
+  window.scrollTo({top:0,behavior:'auto'});
+}
+
 function switchTab(tab, keepHistory){
   if(tab==='calendar'){
     // по слову календарь — просто главная, без открытия календаря
@@ -1467,6 +1483,8 @@ function switchTab(tab, keepHistory){
   state.tab=tab;
   if(tab!=='detail') state.detailSlug=null;
   document.body.classList.remove('map-fullscreen','pl-map-fs');
+  // на вкладке карты скролл страницы блокируем: хедер всегда на месте, карта ровно от хедера до футера
+  document.body.classList.toggle('map-tab-open', tab==='map');
   document.documentElement.style.removeProperty('height');
   document.body.style.removeProperty('overflow');
   document.body.style.removeProperty('height');
@@ -1488,8 +1506,14 @@ function switchTab(tab, keepHistory){
   if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
   if(els.viewDetail) els.viewDetail.classList.toggle('view--active', tab==='detail');
   if(tab==='map'){
+    // жёстко в начало: мгновенно (не smooth), все скролл-контейнеры + скролл VK-клиента
+    try{ document.documentElement.scrollTop=0; }catch(e){}
+    try{ document.body.scrollTop=0; }catch(e){}
+    try{ window.scrollTo({top:0,behavior:'auto'}); }catch(e){}
+    try{ bridge && bridge.send('VKWebAppScroll',{top:0,speed:0}); }catch(e){}
     initMap();
-    // карта была display:none — дать ей размер и перерисовать дважды
+    // карта была display:none — дать ей размер и перерисовать трижды,
+    // последний раз с повторной фиксацией скролла (поздние сдвиги вёрстки)
     const redo = () => {
       try{ state.map && state.map.invalidateSize && state.map.invalidateSize(); }catch(e){}
       try{ window.dispatchEvent(new Event('resize')); }catch(e){}
@@ -1497,6 +1521,7 @@ function switchTab(tab, keepHistory){
     };
     setTimeout(redo, 80);
     setTimeout(redo, 350);
+    setTimeout(()=>{ try{ document.documentElement.scrollTop=0; }catch(e){} try{ document.body.scrollTop=0; }catch(e){} try{ window.scrollTo({top:0,behavior:'auto'}); }catch(e){} redo(); }, 800);
     try{ bridge && bridge.send('VKWebAppSetViewSettings',{status_bar_style:'light', action_bar_color:'#ffffff'});}catch(e){}
   }
   if(!keepHistory){
@@ -1505,10 +1530,13 @@ function switchTab(tab, keepHistory){
       if(location.hash && location.hash.startsWith('#/event/')) history.pushState({tab}, '', url);
     }catch(e){}
   }
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({top:0,behavior: tab==='map' ? 'auto' : 'smooth'});
 }
 
 function wire(){
+  // логотип «Живое!» — главная мини-приложения (десктоп и мобильный), а не permlive.ru
+  const logoHome=$('#pl-logo-home');
+  if(logoHome && !logoHome._wired){ logoHome._wired=true; logoHome.addEventListener('click', function(e){ e.preventDefault(); goHome(); }); }
   // header nav (desktop) + footer nav (mobile) — обе должны кликаться
   $$('.pl-header-link').forEach(a=>{
     a.addEventListener('click', function(e){
@@ -1748,6 +1776,8 @@ function wire(){
           if(ins){
             document.documentElement.style.setProperty('--vk-inset-top', (ins.top||0)+'px');
             document.documentElement.style.setProperty('--vk-inset-bottom', (ins.bottom||0)+'px');
+            // инсеты приехали поздно — пересчитать карту, если она открыта
+            try{ if(state.tab==='map'){ window.dispatchEvent(new Event('resize')); refreshMapMarkers(); } }catch(err){}
           }
         }
       });
