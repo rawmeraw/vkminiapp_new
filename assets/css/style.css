@@ -278,8 +278,8 @@ body.map-tab-open #app{padding-bottom:0}
 #view-map .pl-map-date-btn,
 #view-map .pl-map-mode-btn{z-index:10002 !important;display:inline-flex !important;visibility:visible !important;opacity:1 !important}
 #view-map .pl-map-mode-dropdown{z-index:10003 !important}
-.pl-map-controls{z-index:10003 !important;right:16px !important;padding:8px !important;margin:0 !important;width:56px !important;box-sizing:border-box}
-.pl-map-controls .pl-map-control-btn{margin:4px 0;width:40px !important;height:40px !important}
+.pl-map-controls{z-index:10003 !important;right:16px !important;padding:0 !important;margin:0 !important;width:auto !important;box-sizing:border-box;gap:8px}
+.pl-map-controls .pl-map-control-btn{margin:0;width:40px !important;height:40px !important}
 .ymaps3x-zoom-control, [class*="zoom-control"], .YMapZoomControl{display:none !important}
 /* календарь над картой по центру, а не слева от карты на широком экране */
 @media (min-width:768px){

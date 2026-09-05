@@ -1252,7 +1252,7 @@ function ensureMapButtons(){
     modeBtn.style.display='inline-flex';
     modeBtn.style.visibility='visible';
     updateForyouOption();
-    // right controls — один рабочий fullscreen ниже геопозиции, зум в том же столбце, посвободнее
+    // right controls — один рабочий fullscreen ниже геопозиции, зум в том же столбце, компактно как на сайте
     let controls=document.querySelector('.pl-map-controls');
     if(!controls){
       controls=document.createElement('div');
@@ -1313,9 +1313,10 @@ function ensureMapButtons(){
     };
     controls.appendChild(zin);
     controls.appendChild(zout);
-    controls.style.width='56px';
-    controls.style.padding='6px';
-    controls.style.gap='6px';
+    // как на сайте: только gap из CSS, без инлайн-паддингов и ширины
+    controls.style.width='';
+    controls.style.padding='';
+    controls.style.gap='';
   }, 300);
   // повтор через 1с — левые кнопки и лишний fullscreen
   setTimeout(function(){
@@ -1325,7 +1326,7 @@ function ensureMapButtons(){
     if(m){ m.style.display='inline-flex'; m.style.visibility='visible'; m.style.opacity='1'; }
     const ctr=document.querySelector('.pl-map-controls');
     if(ctr){
-      ctr.style.width='56px'; ctr.style.padding='6px'; ctr.style.gap='10px';
+      ctr.style.width=''; ctr.style.padding=''; ctr.style.gap='';
       const expands=Array.from(ctr.querySelectorAll('button')).filter(function(b){return b.innerHTML.includes('fa-expand')||b.innerHTML.includes('fa-compress')});
       expands.forEach(function(b,i){ if(i>0) b.remove(); });
     }
