@@ -1103,7 +1103,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         emotionPopEl.classList.add('pl-map-balloon--open');
         attachSwipeClose(emotionPopEl, hideEmotionPop);
         positionEmotionPop(markerEl);
-        state.emotionOpenId = em.id;
+        emotionOpenId = em.id;
     }
 
     function refreshEmotionLikeUI(em) {
@@ -1112,7 +1112,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             applyEmotionSize(markerEl, em);
             markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
         }
-        if (emotionPopEl && state.emotionOpenId === em.id) {
+        if (emotionPopEl && emotionOpenId === em.id) {
             var btn = emotionPopEl.querySelector('.pl-map-emotion-pop__like');
             if (btn) {
                 btn.classList.toggle('is-liked', !!em.liked);
@@ -1524,7 +1524,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var em = el_.__em;
         if (!em) return;
 
-        if (state.emotionOpenId === em.id && emotionPopEl && emotionPopEl.parentNode) {
+        if (emotionOpenId === em.id && emotionPopEl && emotionPopEl.parentNode) {
             hideEmotionPop();
             return;
         }
