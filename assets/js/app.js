@@ -898,7 +898,9 @@ function openTimeline(type){
   history.pushState({timeline:type},'',`#timeline-${type}`);
   // скролл к самому верху таймлайна, а не чуть ниже — без smooth смещения
   requestAnimationFrame(function(){
-    const top = els.timelineWrap.getBoundingClientRect().top + window.scrollY - 64; // header height
+    let hh = 64;
+    try{ hh = document.querySelector('.pl-header').getBoundingClientRect().height || 64; }catch(e){}
+    const top = els.timelineWrap.getBoundingClientRect().top + window.scrollY - hh; // высота хедера с VK-инсетом
     window.scrollTo({top: Math.max(0, top), behavior:'auto'});
   });
 }

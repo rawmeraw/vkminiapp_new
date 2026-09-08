@@ -12,6 +12,11 @@
   --tabbar-h:56px;
   --vk-inset-top:0px;
   --vk-inset-bottom:0px;
+  /* Безопасные отступы: VK-инсеты или системный safe-area (что больше).
+     Бары должны перекрывать эти зоны фоном, а не отступать от них —
+     иначе скроллящийся контент просвечивает над хедером и под футером. */
+  --vk-safe-top:max(var(--vk-inset-top), env(safe-area-inset-top, 0px));
+  --vk-safe-bottom:max(var(--vk-inset-bottom), env(safe-area-inset-bottom, 0px));
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--dark);font-family:'Jost',Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -26,8 +31,9 @@ body{overflow-x:hidden;overflow-y:visible !important;max-width:100vw}
 .hidden{display:none !important}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
 
-/* Header — VK insets */
-.pl-header{position:fixed;top:var(--vk-inset-top);left:0;right:0;height:var(--header-h);background:#fff;border-bottom:1px solid rgba(0,0,0,.08);z-index:1000;display:flex;align-items:center}
+/* Header — стоит на самом верху (top:0) и перекрывает VK-инсет/сейф-зону
+   своим фоном; контент хедера центрируется в зоне --header-h */
+.pl-header{position:fixed;top:0;left:0;right:0;height:calc(var(--header-h) + var(--vk-safe-top));padding-top:var(--vk-safe-top);background:#fff;border-bottom:1px solid rgba(0,0,0,.08);z-index:1000;display:flex;align-items:center}
 .pl-header__inner{max-width:1120px;margin:0 auto;width:100%;padding:0 16px;display:flex;align-items:center;gap:16px}
 .pl-logo{display:flex;align-items:center;gap:8px;font-weight:700;text-decoration:none}
 .pl-logo__img{width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(0,0,0,.08);display:block}
@@ -61,8 +67,10 @@ html,body{overscroll-behavior-x:none}
   .pl-header__search input, #add-link, #search-input{font-size:16px !important}
 }
 
-/* Main layout — VK insets, без футера */
-#app{padding-top:calc(var(--header-h) + var(--vk-inset-top));padding-bottom:24px;max-width:1120px;margin:0 auto;min-height:100vh;overflow:visible;min-height:calc(100dvh - var(--vk-inset-top) - var(--vk-inset-bottom))}
+/* Main layout — контент начинается под хедером с учётом сейф-зоны, без футера */
+#app{padding-top:calc(var(--header-h) + var(--vk-safe-top));padding-bottom:24px;max-width:1120px;margin:0 auto;min-height:100vh;overflow:visible;min-height:calc(100dvh - var(--vk-safe-top) - var(--vk-safe-bottom))}
+/* на мобильных низ контента — над таббаром, чтобы ничего не пряталось под ним */
+@media(max-width:768px){#app{padding-bottom:calc(var(--tabbar-h) + var(--vk-safe-bottom) + 16px)}}
 .view{display:none;padding:0 12px}
 .view--active{display:block;overflow:visible}
 body.map-fullscreen,body.pl-map-fs{overflow:visible !important;height:auto !important}
@@ -188,7 +196,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 /* Timeline */
 .timeline-wrap{margin-top:8px}
 .schedule-day{margin:18px 0}
-.schedule-day-title{font-size:15px;font-weight:700;padding:12px 0 8px;position:sticky;top:var(--header-h);background:#fff;z-index:5;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0f0f0}
+.schedule-day-title{font-size:15px;font-weight:700;padding:12px 0 8px;position:sticky;top:calc(var(--header-h) + var(--vk-safe-top));background:#fff;z-index:5;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0f0f0}
 .schedule-day-title i{color:var(--red)}
 .schedule-day-events{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .schedule-event{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:14px;background:#fafafa;border:1px solid rgba(0,0,0,.06)}
@@ -207,7 +215,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 }
 
 /* Map — без футера, на всю высоту, без белой полосы */
-#view-map{padding:0;position:relative;min-height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom));height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom));background:#f7f4ef;margin-top:0}
+#view-map{padding:0;position:relative;min-height:calc(100dvh - var(--header-h) - var(--vk-safe-top) - var(--vk-safe-bottom));height:calc(100dvh - var(--header-h) - var(--vk-safe-top) - var(--vk-safe-bottom));background:#f7f4ef;margin-top:0}
 .map{position:absolute;inset:0;width:100%;height:100%;background:#f7f4ef;top:0 !important}
 .leaflet-container{font-family:'Jost',Arial,sans-serif}
 .pl-map-pin{display:flex;align-items:center;gap:6px;padding:6px 10px;border:2px solid var(--red);border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18);font-weight:600;font-size:12px;white-space:nowrap}
@@ -226,7 +234,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 /* Sheet */
 .sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.32);opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s;z-index:1500}
 .sheet-overlay--show{opacity:1;visibility:visible}
-.sheet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;max-height:82vh;overflow:auto;transform:translateY(110%);transition:transform .28s;z-index:1501;padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;max-height:82vh;overflow:auto;transform:translateY(110%);transition:transform .28s;z-index:1501;padding:12px 16px calc(16px + var(--vk-safe-bottom))}
 .sheet--open{transform:translateY(0)}
 .sheet__handle{width:40px;height:4px;border-radius:2px;background:rgba(0,0,0,.14);margin:6px auto 10px}
 .sheet__close{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.06);font-size:20px;cursor:pointer}
@@ -240,8 +248,9 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .pl-btn--light{background:#ececec;color:#222}
 .pl-btn:hover{filter:brightness(1.05)}
 
-/* Tabbar — только на мобильных, с подписями; на десктопе — хедер */
-.pl-tabbar{position:fixed;left:0;right:0;bottom:var(--vk-inset-bottom);height:var(--tabbar-h);background:#fff;border-top:1px solid rgba(0,0,0,.08);display:flex;z-index:10005 !important;visibility:visible !important;opacity:1 !important;padding-bottom:env(safe-area-inset-bottom,0px);transform:translateZ(0)}
+/* Tabbar — стоит на самом низу (bottom:0) и перекрывает VK-инсет/сейф-зону
+   своим фоном; кнопки центрируются в зоне --tabbar-h */
+.pl-tabbar{position:fixed;left:0;right:0;bottom:0;height:calc(var(--tabbar-h) + var(--vk-safe-bottom));background:#fff;border-top:1px solid rgba(0,0,0,.08);display:flex;z-index:10005 !important;visibility:visible !important;opacity:1 !important;padding-bottom:var(--vk-safe-bottom);transform:translateZ(0)}
 @media (min-width: 769px){
   .pl-tabbar{display:none !important}
 }
@@ -251,7 +260,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .pl-tabbar__btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;color:var(--muted);font-size:10px;font-weight:500;cursor:pointer}
 .pl-tabbar__btn i{font-size:18px}
 .pl-tabbar__btn--active{color:var(--red)}
-.pl-toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + 12px);transform:translate(-50%,16px);background:rgba(20,24,30,.92);color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;visibility:hidden;transition:opacity .2s,transform .2s,visibility .2s;z-index:3000;max-width:calc(100% - 24px);text-align:center}
+.pl-toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + var(--vk-safe-bottom) + 12px);transform:translate(-50%,16px);background:rgba(20,24,30,.92);color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;visibility:hidden;transition:opacity .2s,transform .2s,visibility .2s;z-index:3000;max-width:calc(100% - 24px);text-align:center}
 .pl-toast--show{opacity:1;visibility:visible;transform:translate(-50%,0)}
 .timeline-empty{padding:32px 16px;text-align:center;color:#666}
 .timeline-empty p{margin-bottom:12px}
@@ -270,7 +279,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
   #view-map{padding:0}
   #view-map #map{border-radius:0}
   /* низ карты — ровно к верху футера, а не под него */
-  #view-map{min-height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom) - var(--tabbar-h));height:calc(100dvh - var(--header-h) - var(--vk-inset-top) - var(--vk-inset-bottom) - var(--tabbar-h))}
+  #view-map{min-height:calc(100dvh - var(--header-h) - var(--vk-safe-top) - var(--vk-safe-bottom) - var(--tabbar-h));height:calc(100dvh - var(--header-h) - var(--vk-safe-top) - var(--vk-safe-bottom) - var(--tabbar-h))}
 }
 /* Вкладка карты: скролл страницы заблокирован — хедер всегда на месте, карта от хедера до футера */
 body.map-tab-open{overflow:hidden !important;overscroll-behavior:none}
