@@ -346,6 +346,8 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail-ticket--yandex:hover{color:#000}
 .detail-ticket--mts{background:linear-gradient(135deg,#e30611,#ff1f2a);color:#fff}
 .detail-ticket--mts img{filter:brightness(0) invert(1)}
+.detail-ticket--ticketland{background:#fff;color:#1d1f24;box-shadow:0 4px 15px rgba(0,0,0,.35)}
+.detail-ticket--ticketland:hover{color:#1d1f24}
 .detail-route--yandex{background:#fc0 !important;color:#000 !important;border-color:#fc0 !important}
 .detail__performers{margin-top:14px}
 .detail__performers h3{font-size:15px;margin:0 0 8px}

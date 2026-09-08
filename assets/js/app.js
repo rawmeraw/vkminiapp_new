@@ -332,6 +332,7 @@ function normalizeApiConcert(c){
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
     place, place_name: placeName,
     bg_color: bg, main_image: img, images: c.images||[], price: c.price ?? '',
+    ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
     tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight)
@@ -346,6 +347,7 @@ function normalizeApiConcertLight(c){
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
     place: c.place||{name:placeName}, place_name: placeName,
     bg_color: bg, main_image: img, price: c.price ?? '',
+    ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', tags: c.tags||[], description:''
   };
@@ -1034,21 +1036,23 @@ function wireDetailBack(){
   if(b && !b._wired){ b._wired=true; b.onclick=()=>{ try{ history.back(); }catch(e){ closeDetail(); } setTimeout(()=>{ if(state.detailSlug) closeDetail(); }, 300); }; }
 }
 function ticketVendor(url){
-  // вендор билетной ссылки как на сайте (PostDetailView): прямые ссылки;
-  // короткие permlive.ru/XXXXXX резолвит только сервер
+  // Локальное определение вендора для прямых ссылок (зеркало ticket_utils.get_ticket_vendor).
+  // Короткие permlive.ru/XXXXXX резолвит только сервер — он присылает готовый
+  // ticket_vendor в /api/concert/<slug>/, см. ticketBtnHTML.
   const u = String(url||'').toLowerCase();
   const m = /erid=([^&\s]+)/.exec(u);
   if(u.includes('afisha.yandex.ru') || (m && /^\d/.test(m[1]))) return 'yandex';
   if(u.includes('cake.permlive.ru/go')) return 'mts';
-  if(u.includes('ticketland')) return 'ticketland';
+  if(u.includes('ticketland.ru')) return 'ticketland';
   return 'default';
 }
-function ticketBtnHTML(tickets, price){
-  const v = ticketVendor(tickets);
+function ticketBtnHTML(tickets, price, vendor){
+  // vendor — ticket_vendor с сервера (уже с учётом ShortLink); фолбэк — локальное определение.
+  const v = vendor || ticketVendor(tickets);
   const priceSuffix = price===0 ? ' — Бесплатно' : (price ? ` от ${price}₽` : '');
   if(v==='yandex') return `<a class="detail-ticket detail-ticket--yandex" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/yandex_afisha.svg" alt="Яндекс.Афиша"><span>Купить на Яндекс.Афише${price>0? ` от ${price}₽`:''}</span></a>`;
   if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Купить на МТС Live${price>0? ` от ${price}₽`:''}</span></a>`;
-  if(v==='ticketland') return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить на Ticketland${esc(priceSuffix)}</span></a>`;
+  if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Купить на Ticketland${price>0? ` от ${price}₽`:''}</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
 function renderDetail(c, isFull){
@@ -1089,7 +1093,7 @@ function renderDetail(c, isFull){
         <h1 class="detail__title">${esc(c.title)}</h1>
         <div class="detail__hero-info">${esc(infoStr)}</div>
         ${tags? `<div class="detail__hero-tags">${tags}</div>`:''}
-        ${tickets? ticketBtnHTML(tickets, c.price):''}
+        ${tickets? ticketBtnHTML(tickets, c.price, c.ticket_vendor):''}
       </div>
     </div>
     ${bandsHTML}
