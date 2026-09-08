@@ -944,7 +944,9 @@ function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverl
 // [https://vk.com/...|...], [wall-123_456|...]. vk.com и vk.ru — одно и то же,
 // нормализуем к https://vk.com/. VK-разметку обрабатываем первой, пока сырая.
 function linkify(s){
-  let t = esc(s||'');
+  // Как normalize_vk_text на сервере: схлопываем CRLF, иначе в HTML остаются stray \r.
+  s = String(s||'').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let t = esc(s);
   // vk_urlize
   t = t.replace(/\[<a[^>]*href="https?:\/\/vk\.(?:com|ru)\/(event|club|id|public)(\d+)[^"]*"[^>]*>https?:\/\/vk\.[^|]+\|([^<]+)<\/a>\s*([^\]]*)\]/g,
     function(m, type, id, t1, t2){ return `<a href="https://vk.com/${type}${id}" target="_blank" rel="noopener">${(t1+' '+t2).trim()}</a>`; });
@@ -1062,8 +1064,10 @@ function renderDetail(c, isFull){
     return;
   }
   const dObj = c.date ? parseISO(c.date) : null;
-  const dateStr = dObj ? `${fmtHeaderDate(dObj)}${c.time? ' в '+esc(c.time.slice(0,5)):''}` : '';
-  const venue = esc(c.place_name||c.place?.name||'');
+  // Сырые части без esc: экранируем один раз целым infoStr ниже.
+  // Иначе двойное экранирование — кавычки заведения видны как &quot; текстом.
+  const datePart = dObj ? `${fmtHeaderDate(dObj)}${c.time? ' в '+c.time.slice(0,5):''}` : '';
+  const venuePart = c.place_name||c.place?.name||'';
   const ratingNum = parseFloat(c.cached_rating||0);
   const ratingVal = c.display_rating||c.cached_rating||'';
   const imgUrl = c.main_image || '';
@@ -1077,7 +1081,7 @@ function renderDetail(c, isFull){
   const tickets = c.tickets || '';
   // цену в строке инфо показываем только когда нет ссылки на билеты (иначе она в кнопке)
   const pricePart = !tickets ? (c.price===0 ? ' › Бесплатно' : (c.price ? ` › ${c.price}₽` : '')) : '';
-  const infoStr = [dateStr||'Дата уточняется', venue||''].filter(Boolean).join(' › ') + pricePart;
+  const infoStr = [datePart||'Дата уточняется', venuePart||''].filter(Boolean).join(' › ') + pricePart;
   const srcLink = c.link || '';
   const bands = (c.bands||[]).filter(b=>b && b.name);
   const bandsHTML = bands.length ? `<div class="detail__performers"><h3>Исполнители</h3><div class="detail__performers-row">${bands.map(b=>{
