@@ -5,6 +5,14 @@
     var LOCATION_KEY = 'permlive_user_location';
     var LOCATION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 дней — запоминаем до чистки куки
     var DEFAULT_CENTER = [56.2502, 58.0105];
+    // Центры городов [lng, lat] — фолбэк, когда в дне нет событий с координатами.
+    // Точный центр текущего города миник кладёт в PermLiveMapData.cityCenter.
+    var CITY_CENTERS = {
+        perm: [56.2778, 58.0095],
+        ekb: [60.6057, 56.8389],
+        izhevsk: [53.2115, 56.8527],
+        moscow: [37.6173, 55.7558]
+    };
 
     var GENRE_COLORS = {
         'live': '#e14425',
@@ -283,12 +291,25 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     var OUTLIER_KM = 10;
 
+    function cityFallbackCenter() {
+        // Центр текущего города мини-приложения (не Пермь для всех).
+        try {
+            var d = window.PermLiveMapData || {};
+            if (d.cityCenter && isFinite(d.cityCenter[0]) && isFinite(d.cityCenter[1])) {
+                return [Number(d.cityCenter[0]), Number(d.cityCenter[1])];
+            }
+            var slug = miniCitySlug();
+            if (slug && CITY_CENTERS[slug]) return CITY_CENTERS[slug];
+        } catch (e) {}
+        return DEFAULT_CENTER;
+    }
+
     function averageCoords() {
         var list = filteredEvents();
         if (!list.length) {
 
             list = state.events;
-            if (!list.length) return DEFAULT_CENTER;
+            if (!list.length) return cityFallbackCenter();
         }
         var center = weightedCenter(list);
         var close = [];
@@ -309,7 +330,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             sumLat += c[1] * weight;
             w += weight;
         }
-        return w ? [sumLng / w, sumLat / w] : DEFAULT_CENTER;
+        return w ? [sumLng / w, sumLat / w] : cityFallbackCenter();
     }
 
     function pinScale(rating) {

@@ -202,6 +202,20 @@ function cityPrefix(slug){
   slug = slug || state.city || 'perm';
   return (!slug || slug==='perm') ? '' : '/'+slug;
 }
+// Центр текущего города {lat, lon}: данные /api/cities/, иначе фолбэк-таблица
+function cityCenterLatLon(slug){
+  const c = cityBySlug(slug || state.city);
+  // typeof-проверка: isFinite(null)===true, а null-координаты нам не подходят
+  if(c && typeof c.lat==='number' && typeof c.lon==='number' && isFinite(c.lat) && isFinite(c.lon)){
+    return {lat: c.lat, lon: c.lon};
+  }
+  const f = CITY_FALLBACK.find(x=>x.slug===(slug || state.city)) || CITY_FALLBACK[0];
+  return {lat: f.lat, lon: f.lon};
+}
+function cityCenterStr(slug){
+  const p = cityCenterLatLon(slug);
+  return p.lat+','+p.lon;
+}
 function cityQuery(slug){
   return 'city='+encodeURIComponent(slug || state.city || 'perm');
 }
@@ -348,7 +362,11 @@ function updateCityUI(){
     });
   }
   try{
-    if(window.PermLiveMapData) window.PermLiveMapData.citySlug = state.city;
+    if(window.PermLiveMapData){
+      window.PermLiveMapData.citySlug = state.city;
+      const cc = cityCenterLatLon(state.city);
+      window.PermLiveMapData.cityCenter = [cc.lon, cc.lat]; // [lng, lat] для карты
+    }
   }catch(e){}
 }
 
@@ -584,7 +602,7 @@ function normalizeApiConcert(c){
   const placeName = c.place?.name || c.place_name || '';
   const bg = c.bg_color || c.place?.bg_color || hashColor(slug||placeName||String(c.id));
   const img = c.main_image || c.image || c.images?.[0]?.url || '';
-  const place = c.place||{name:placeName, coordinates:c.coordinates||'58.0105,56.2502', address:c.address||''};
+  const place = c.place||{name:placeName, coordinates:c.coordinates||cityCenterStr(), address:c.address||''};
   if(!place.slug && c.place?.slug) place.slug=c.place.slug;
   if(!place.map && c.place?.map) place.map=c.place.map;
   return {
@@ -604,7 +622,7 @@ function normalizeApiConcertLight(c){
   const img = c.main_image || c.image || '';
   return {
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
-    place: c.place||{name:placeName}, place_name: placeName,
+    place: c.place||{name:placeName, coordinates:cityCenterStr()}, place_name: placeName,
     bg_color: bg, main_image: img, price: c.price ?? '',
     ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
@@ -618,7 +636,7 @@ function normalizeApiEvent(e){
   const img = e.image || e.main_image || '';
   return {
     id:e.id||Math.floor(Math.random()*1e6), title:e.title, slug, date:e.date, time:(e.time||'19:00').slice(0,5),
-    place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : '58.0105,56.2502'), address:e.address||''}, place_name:placeName,
+    place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : cityCenterStr()), address:e.address||''}, place_name:placeName,
     bg_color:bg, main_image:img, price:e.price ?? '', cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
     is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||''
   };
@@ -1684,15 +1702,18 @@ function refreshMapMarkers(){
     try{
       const evts=listY.map(c=>{
         const coords=c.place?.coordinates||'';
-        const [latStr,lngStr]=coords.split(','); const lat=parseFloat(latStr), lng=parseFloat(lngStr);
+        const [latStr,lngStr]=String(coords).split(','); const lat=parseFloat(latStr), lng=parseFloat(lngStr);
+        // как сайт (build_map_events): без координат заведение на карту не ставим.
+        // Раньше сюда подставлялся центр Перми — он и тянул камеру в чужой город.
+        if(!isFinite(lat) || !isFinite(lng)) return null;
         return {
           id:c.id, title:c.title, url:siteEventUrl(c.slug||''),
           date:c.date, time:c.time||'', price:c.price||0, paid:!!c.is_paid, rating:parseFloat(c.cached_rating||3),
           place:c.place_name||c.place?.name||'', address:c.place?.address||'',
-          coordinates:[isFinite(lng)?lng:56.25, isFinite(lat)?lat:58.01],
+          coordinates:[lng, lat],
           image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false
         };
-      }).filter(e=>e.coordinates[0] && e.coordinates[1]);
+      }).filter(e=>e && e.coordinates[0] && e.coordinates[1]);
       window.PermLiveMapData = window.PermLiveMapData||{};
       window.PermLiveMapData.events=evts;
       window.PermLiveMapData.today=state.todayISO;
