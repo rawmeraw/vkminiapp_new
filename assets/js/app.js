@@ -1992,6 +1992,9 @@ function wire(){
       e.preventDefault();
       const tab=this.dataset.tab;
       if(tab){
+        // «Календарь» — как главная ссылка: полный сброс в ленту (иначе залипший
+        // timelineMode снова показывал бы таймлайн вместо календаря)
+        if(tab==='feed'){ goHome(); return; }
         if(state.detailSlug) { state.prevView=tab; closeDetail(false); }
         switchTab(tab);
       }
