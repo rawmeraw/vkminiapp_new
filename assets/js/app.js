@@ -70,12 +70,35 @@ const els = {
   sectionsIcon: $('#sections-dropdown-icon'),
 };
 
-// --- timezone Ekaterinburg (Asia/Yekaterinburg UTC+5) ---
-function ekbTodayISO(){
-  // Use Intl to get date in Ekaterinburg
-  const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Yekaterinburg', year:'numeric', month:'2-digit', day:'2-digit'});
-  return fmt.format(new Date());
+// --- timezone: «сегодня» в поясе текущего города, как get_city_today() на сайте ---
+// Карта поясов здесь (а не ниже): функция вызывается из инициализатора state,
+// когда нижние const ещё в TDZ — тут только function/var, безопасно.
+var CITY_TZ_MAP = {perm:'Asia/Yekaterinburg', ekb:'Asia/Yekaterinburg', izhevsk:'Europe/Samara', moscow:'Europe/Moscow'};
+function currentCitySlugSafe(){
+  try{ if(typeof state!=='undefined' && state && state.city) return state.city; }catch(e){}
+  return null;
 }
+function cityTimezone(slug){
+  slug = ((slug || currentCitySlugSafe()) || 'perm').toLowerCase();
+  try{
+    if(typeof cityBySlug==='function'){
+      const c = cityBySlug(slug);
+      if(c && c.timezone) return c.timezone;
+    }
+  }catch(e){}
+  return CITY_TZ_MAP[slug] || 'Asia/Yekaterinburg';
+}
+function cityTodayISO(slug){
+  // Дата «сегодня» в поясе города через Intl (Москва +3, Ижевск +4, Пермь/Екб +5)
+  try{
+    const fmt = new Intl.DateTimeFormat('en-CA', {timeZone: cityTimezone(slug), year:'numeric', month:'2-digit', day:'2-digit'});
+    return fmt.format(new Date());
+  }catch(e){
+    const fmt = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Yekaterinburg', year:'numeric', month:'2-digit', day:'2-digit'});
+    return fmt.format(new Date());
+  }
+}
+function ekbTodayISO(){ return cityTodayISO(); }
 function ekbToISO(d){ // d is local Date, convert via Ekaterinburg? For parsing we treat ISO as calendar date
   return d.toISOString().slice(0,10);
 }
@@ -191,10 +214,10 @@ const CITY_GEO_TRIED_KEY = 'pl_city_geo_tried';
 const CITY_GEO_RADIUS_KM = 150;
 // Фолбэк из справочника City (синхронизирован с БД; точные данные — /api/cities/)
 const CITY_FALLBACK = [
-  {slug:'perm', name:'Пермь', full_name:'Пермь', genitive:'Перми', lat:58.0095, lon:56.2778, is_default:true},
-  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', genitive:'Екатеринбурга', lat:56.8389, lon:60.6057, is_default:false},
-  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', lat:56.8527, lon:53.2115, is_default:false},
-  {slug:'moscow', name:'Москва', full_name:'Москва', genitive:'Москвы', lat:55.7558, lon:37.6173, is_default:false},
+  {slug:'perm', name:'Пермь', full_name:'Пермь', genitive:'Перми', timezone:'Asia/Yekaterinburg', lat:58.0095, lon:56.2778, is_default:true},
+  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', genitive:'Екатеринбурга', timezone:'Asia/Yekaterinburg', lat:56.8389, lon:60.6057, is_default:false},
+  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', timezone:'Europe/Samara', lat:56.8527, lon:53.2115, is_default:false},
+  {slug:'moscow', name:'Москва', full_name:'Москва', genitive:'Москвы', timezone:'Europe/Moscow', lat:55.7558, lon:37.6173, is_default:false},
 ];
 // Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
 window.citySlugOf = function(){ return state.city || 'perm'; };
@@ -449,6 +472,7 @@ async function switchCity(slug, opts){
   if(!cityBySlug(slug)) slug='perm';
   if(slug===state.city && !opts.force){ updateCityUI(); return; }
   state.city = slug;
+  state.todayISO = cityTodayISO(slug);
   try{ localStorage.setItem(CITY_LS_KEY, slug); }catch(e){}
   updateCityUI();
   // как переход на главную нового города на сайте: фильтры сбрасываются
@@ -2159,6 +2183,8 @@ function wire(){
   switchTab('feed', true);
   // город как на сайте: запомненный — сразу; иначе дефолт + фоновая геопроверка
   state.city = resolveStoredCity();
+  // «сегодня» в поясе города (Москва +3, Ижевск +4) — бэкенд потом уточнит своим today
+  state.todayISO = cityTodayISO();
   updateCityUI();
   renderCityDropdown();
   updateSectionsUI();
