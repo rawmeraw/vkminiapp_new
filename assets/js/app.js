@@ -453,6 +453,16 @@ function closeSectionsDropdown(){
   els.sectionsDropdown.classList.remove('open');
   if(els.sectionsBtn) els.sectionsBtn.setAttribute('aria-expanded','false');
 }
+// Подсветка кнопки «Таймлайн» в мобильном таббаре (у неё нет data-tab)
+function syncTabbarTimeline(){
+  try{
+    const btn = document.getElementById('tabbar-timeline');
+    if(!btn) return;
+    const active = currentSection()==='timeline';
+    btn.classList.toggle('pl-tabbar__btn--active', active);
+    btn.setAttribute('aria-selected', String(active));
+  }catch(e){}
+}
 function openUpcomingTimeline(){
   // Таймлайн как на сайте: вся upcoming-лента текущего города
   try{ closeSheet(); }catch(e){}
@@ -1255,6 +1265,7 @@ function applyFilter(){
   }
   renderSliders();
   try{ updateSectionsUI(); }catch(e){}
+  try{ syncTabbarTimeline(); }catch(e){}
 }
 
 function openTimeline(type){
@@ -1880,6 +1891,7 @@ function switchTab(tab, keepHistory){
     b.classList.toggle('pl-tabbar__btn--active', isActive);
     b.setAttribute('aria-selected', String(isActive));
   });
+  syncTabbarTimeline();
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
   if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
@@ -1977,6 +1989,17 @@ function wire(){
       }
     });
   });
+  // кнопка «Таймлайн» в таббаре — не таб, а upcoming-лента текущего города
+  const tabbarTimeline=$('#tabbar-timeline');
+  if(tabbarTimeline && !tabbarTimeline._wired){
+    tabbarTimeline._wired=true;
+    tabbarTimeline.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      try{ closeCityDropdown(); closeSectionsDropdown(); }catch(err){}
+      openUpcomingTimeline();
+    });
+  }
   // Детальные страницы: перехватываем все ссылки на /event/<slug>/ и #/event/<slug>/
   document.addEventListener('click', function(e){
     // сердечки внутри карточек — это лайки, а не переход

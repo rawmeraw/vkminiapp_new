@@ -106,6 +106,8 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
   .pl-logo__text{font-size:15px}
   .pl-header__inner{padding:0 10px}
   .pl-header .city-dropdown-btn,.pl-header .sections-dropdown-btn{padding:6px 9px;font-size:12px;gap:6px}
+  /* мобильная навигация — таббар снизу; сверху справа только город */
+  .pl-header #sections-dropdown,.pl-header #propose-btn{display:none}
 }
 /* Кнопка «Предложить событие» — отдельный акцент справа в навигации */
 .propose-btn{display:inline-flex;align-items:center;gap:7px;border:0;background:var(--red);color:#fff;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 2px 8px rgba(225,68,37,.35);flex:none}
