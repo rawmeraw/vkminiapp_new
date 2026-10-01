@@ -96,6 +96,23 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .calendar-arrow{width:32px;height:32px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .calendar-arrow.hidden{opacity:0;pointer-events:none}
 
+/* City dropdown — перед календарём, как в шапке сайта */
+.city-dropdown{position:relative;padding:12px 0 0;z-index:50}
+.city-dropdown-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;color:var(--dark);cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.city-dropdown-btn .fa-city{color:var(--red)}
+.city-dropdown-chevron{font-size:10px;color:var(--muted);transition:transform .18s}
+.city-dropdown.open .city-dropdown-chevron{transform:rotate(180deg)}
+.city-dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;display:none;z-index:60}
+.city-dropdown.open .city-dropdown-menu{display:block}
+.city-dropdown-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;cursor:pointer}
+.city-dropdown-item:hover{background:#f5f5f5}
+.city-dropdown-item.active{font-weight:700;color:var(--red)}
+.city-dropdown-item .fa-city{color:var(--muted);font-size:13px}
+.city-dropdown-item.active .fa-city{color:var(--red)}
+.city-dropdown-item .fa-check{margin-left:auto;font-size:12px;color:var(--red)}
+.city-count-badge{margin-left:auto;font-size:11px;color:var(--muted);background:#f0f0f0;border-radius:999px;padding:2px 8px;font-weight:500}
+.city-dropdown-item.active .city-count-badge{margin-left:8px}
+
 .pl-map-date-btn{height:36px;padding:0 12px;border:1px solid rgba(0,0,0,.1);border-radius:999px;background:#fff;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .pl-map-date-btn--filtered{background:var(--dark);color:#fff;border-color:var(--dark)}
 .pl-map-date-btn__chev{transition:transform .18s}

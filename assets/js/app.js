@@ -59,6 +59,10 @@ const els = {
   sheetOverlay: $('#event-sheet-overlay'),
   sheetContent: $('#sheet-content'),
   mapEl: $('#map'),
+  cityDropdown: $('#city-dropdown'),
+  cityBtn: $('#city-dropdown-btn'),
+  cityMenu: $('#city-dropdown-menu'),
+  cityLabel: $('#city-dropdown-label'),
 };
 
 // --- timezone Ekaterinburg (Asia/Yekaterinburg UTC+5) ---
@@ -123,6 +127,8 @@ function extractSlug(urlOrSlug){
 
 const state = {
   tab: 'feed',
+  city: 'perm',
+  cities: [],
   selectedDate: null,
   range: null,
   datesWithEvents: new Set(),
@@ -171,6 +177,227 @@ function cachedFetch(key, url, ttlMs){
   });
 }
 
+// ---------- City: дропдаун + автоопределение (логика как на сайте) ----------
+// Сайт (header.html): LS 'pl_city' побеждает; иначе геопозиция -> ближайший
+// город по haversine, переброс только если ближе 150 км. Тот же ключ LS,
+// чтобы выбор помнился одинаково.
+const CITY_LS_KEY = 'pl_city';
+const CITY_GEO_TRIED_KEY = 'pl_city_geo_tried';
+const CITY_GEO_RADIUS_KM = 150;
+// Фолбэк из справочника City (синхронизирован с БД; точные данные — /api/cities/)
+const CITY_FALLBACK = [
+  {slug:'perm', name:'Пермь', full_name:'Пермь', lat:58.0095, lon:56.2778, is_default:true},
+  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', lat:56.8389, lon:60.6057, is_default:false},
+  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', lat:56.8527, lon:53.2115, is_default:false},
+  {slug:'moscow', name:'Москва', full_name:'Москва', lat:55.7558, lon:37.6173, is_default:false},
+];
+// Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
+window.citySlugOf = function(){ return state.city || 'perm'; };
+
+function cityBySlug(slug){
+  slug = (slug||'').toLowerCase();
+  return state.cities.find(c=>c.slug===slug) || CITY_FALLBACK.find(c=>c.slug===slug) || null;
+}
+function cityPrefix(slug){
+  slug = slug || state.city || 'perm';
+  return (!slug || slug==='perm') ? '' : '/'+slug;
+}
+function cityQuery(slug){
+  return 'city='+encodeURIComponent(slug || state.city || 'perm');
+}
+function siteUrl(path, slug){
+  return API_BASE + cityPrefix(slug) + path;
+}
+function siteEventUrl(slug, citySlug){
+  return siteUrl('/event/'+encodeURIComponent(slug)+'/', citySlug);
+}
+// Ключи локального кэша — строго на город, иначе Пермь покажется в Екб
+function ck(base){
+  return base + (state.city||'perm') + '_' + state.todayISO;
+}
+
+async function loadCities(){
+  try{
+    const raw = localStorage.getItem('pl_cities_v1');
+    if(raw){
+      const o = JSON.parse(raw);
+      if(o && o.t && Date.now()-o.t < 10*60*1000 && Array.isArray(o.v) && o.v.length){
+        state.cities = o.v;
+        return o.v;
+      }
+    }
+  }catch(e){}
+  const j = await fetchJSON(`${API_BASE}/api/cities/`);
+  if(j && Array.isArray(j.cities) && j.cities.length){
+    state.cities = j.cities;
+    try{ localStorage.setItem('pl_cities_v1', JSON.stringify({t:Date.now(), v:j.cities})); }catch(e){}
+  } else if(!state.cities.length){
+    state.cities = CITY_FALLBACK.slice();
+  }
+  return state.cities;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)*Math.sin(dLon/2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function nearestCity(lat, lon){
+  let best=null, bestDist=Infinity;
+  const list = state.cities.length ? state.cities : CITY_FALLBACK;
+  for(const c of list){
+    if(typeof c.lat!=='number' || typeof c.lon!=='number' || isNaN(c.lat) || isNaN(c.lon)) continue;
+    const d = haversineKm(lat, lon, c.lat, c.lon);
+    if(d < bestDist){ bestDist=d; best=c.slug; }
+  }
+  return {slug:best, dist:bestDist};
+}
+
+// Синхронная часть как на сайте: запомненный город побеждает, иначе дефолт
+function resolveStoredCity(){
+  try{
+    const stored = (localStorage.getItem(CITY_LS_KEY)||'').toLowerCase();
+    if(stored && cityBySlug(stored)) return stored;
+  }catch(e){}
+  return 'perm';
+}
+
+// Асинхронная часть как на сайте: геопозиция -> ближайший город в радиусе 150 км.
+// Возвращает слаг, только если он отличается от текущего (иначе null).
+function detectGeoCity(){
+  return new Promise(function(resolve){
+    let done=false;
+    const finish=(slug)=>{ if(!done){ done=true; resolve(slug||null); } };
+    const apply=(lat, lon)=>{
+      try{
+        const n = nearestCity(lat, lon);
+        if(n.slug && n.slug!==state.city && n.dist < CITY_GEO_RADIUS_KM){
+          try{ localStorage.setItem(CITY_LS_KEY, n.slug); }catch(e){}
+          finish(n.slug);
+        } else finish(null);
+      }catch(e){ finish(null); }
+    };
+    // VK Bridge геоданные — для клиента VK, где navigator.geolocation может молчать
+    const tryBridge=()=>{
+      try{
+        if(bridge){
+          bridge.send('VKWebAppGetGeodata').then(function(g){
+            if(g && isFinite(Number(g.lat)) && isFinite(Number(g.long))) apply(Number(g.lat), Number(g.long));
+            else finish(null);
+          }).catch(function(){ finish(null); });
+          return true;
+        }
+      }catch(e){}
+      return false;
+    };
+    try{
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(
+          (pos)=> apply(pos.coords.latitude, pos.coords.longitude),
+          ()=>{ if(!tryBridge()) finish(null); },
+          {timeout:8000, maximumAge:600000}
+        );
+        // navigator молчит дольше таймаута — пробуем bridge
+        setTimeout(()=>{ if(!done) tryBridge(); }, 9000);
+      } else if(!tryBridge()) finish(null);
+    }catch(e){ if(!tryBridge()) finish(null); }
+    setTimeout(()=>finish(null), 15000);
+  });
+}
+
+function renderCityDropdown(){
+  const menu = els.cityMenu;
+  if(!menu) return;
+  const list = state.cities.length ? state.cities : CITY_FALLBACK;
+  menu.innerHTML = list.map(function(c){
+    const active = c.slug===state.city;
+    const count = (typeof c.event_count==='number' && c.event_count>0)
+      ? `<span class="city-count-badge">${c.event_count}</span>` : '';
+    return `<a class="city-dropdown-item${active?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
+      `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>${count}`+
+      (active ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
+  }).join('');
+  menu.querySelectorAll('[data-city-slug]').forEach(function(a){
+    a.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const slug = a.getAttribute('data-city-slug');
+      closeCityDropdown();
+      if(slug && slug!==state.city) switchCity(slug);
+    };
+  });
+}
+
+function updateCityUI(){
+  const c = cityBySlug(state.city);
+  if(els.cityDropdown) els.cityDropdown.setAttribute('data-current', state.city);
+  if(els.cityLabel && c) els.cityLabel.textContent = c.name;
+  if(els.cityMenu){
+    els.cityMenu.querySelectorAll('[data-city-slug]').forEach(function(a){
+      const active = a.getAttribute('data-city-slug')===state.city;
+      a.classList.toggle('active', active);
+      let check = a.querySelector('.fa-check');
+      if(active && !check){
+        check = document.createElement('i');
+        check.className='fa-solid fa-check';
+        a.appendChild(check);
+      } else if(!active && check) check.remove();
+    });
+  }
+  try{
+    if(window.PermLiveMapData) window.PermLiveMapData.citySlug = state.city;
+  }catch(e){}
+}
+
+function openCityDropdown(){
+  if(!els.cityDropdown) return;
+  renderCityDropdown();
+  els.cityDropdown.classList.add('open');
+  if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','true');
+}
+function closeCityDropdown(){
+  if(!els.cityDropdown) return;
+  els.cityDropdown.classList.remove('open');
+  if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','false');
+}
+
+async function switchCity(slug, opts){
+  opts = opts||{};
+  slug = (slug||'perm').toLowerCase();
+  if(!cityBySlug(slug)) slug='perm';
+  if(slug===state.city && !opts.force){ updateCityUI(); return; }
+  state.city = slug;
+  try{ localStorage.setItem(CITY_LS_KEY, slug); }catch(e){}
+  updateCityUI();
+  // как переход на главную нового города на сайте: фильтры сбрасываются
+  state.selectedDate=null;
+  state.range=null;
+  state.timelineMode=null;
+  state.query='';
+  if(els.searchInput){ els.searchInput.value=''; const sc=$('#search-clear'); if(sc) sc.style.display='none'; }
+  state.concerts=[];
+  state.top10Pool=[];
+  state.upcomingPool=[];
+  state.forYouPool=[];
+  state.hasForYou=false;
+  state.fullLoaded=false;
+  state.upcomingTotalCache=0;
+  state.detailCache={};
+  state.datesWithEvents=new Set();
+  try{ closeDetail(false); }catch(e){}
+  renderCalendarStrip();
+  renderSliderSkeletons();
+  await loadData();
+  try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('city paint failed', e); }
+  try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(e){}
+  try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
+  const _c = cityBySlug(slug);
+  toast('Город: '+(_c ? _c.name : slug));
+}
+
 function rebuildPools(){
   const future = state.concerts.filter(c => c.date >= state.todayISO);
   // топ-10 как на сайте: сначала is_paid, затем uncapped cached_rating, затем дата
@@ -188,7 +415,7 @@ function rebuildPools(){
 // Полный пул (500) — только для счётчика, таймлайнов и фильтров; идёт фоном после first paint
 async function fillFullPool(seen){
   try{
-    const fullRes = await cachedFetch('pl2_concerts_'+state.todayISO, `${API_BASE}/api/concerts/?limit=500&short=1`, 10*60*1000);
+    const fullRes = await cachedFetch(ck('pl2_concerts_'), `${API_BASE}/api/concerts/?${cityQuery()}&limit=500&short=1`, 10*60*1000);
     const results = fullRes && Array.isArray(fullRes.results) ? fullRes.results : (Array.isArray(fullRes) ? fullRes : []);
     let added=false;
     for(const c of results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title)){
@@ -198,7 +425,7 @@ async function fillFullPool(seen){
     state.fullLoaded=true;
     // счётчик «Смотреть все N» кэшируем на день — покажем мгновенно при следующем визите
     state.upcomingTotalCache=state.upcomingPool.length;
-    try{ localStorage.setItem('pl2_total_'+state.todayISO, JSON.stringify({t:Date.now(), v:state.upcomingPool.length})); }catch(e){}
+    try{ localStorage.setItem(ck('pl2_total_'), JSON.stringify({t:Date.now(), v:state.upcomingPool.length})); }catch(e){}
     try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('full paint failed', e); }
   }catch(e){ console.warn('full pool failed', e); }
   return true;
@@ -207,9 +434,9 @@ async function fillFullPool(seen){
 async function loadData(){
   // Фаза 1 — лёгкая (~0.3-0.8с): календарь + 12 ближайших + топ-30. Этого хватает на first paint.
   const [calRes, byDateRes, byRatingRes] = await Promise.allSettled([
-    cachedFetch('pl_cal_'+ekbTodayISO(), `${API_BASE}/api/calendar-dates/`, 60*60*1000),
-    cachedFetch('pl_first_'+state.todayISO, `${API_BASE}/api/concerts/?limit=12&short=1`, 10*60*1000),
-    cachedFetch('pl2_top_'+state.todayISO, `${API_BASE}/api/concerts/?limit=30&order=rating&short=1`, 10*60*1000),
+    cachedFetch(ck('pl_cal_'), `${API_BASE}/api/calendar-dates/?${cityQuery()}`, 60*60*1000),
+    cachedFetch(ck('pl_first_'), `${API_BASE}/api/concerts/?${cityQuery()}&limit=12&short=1`, 10*60*1000),
+    cachedFetch(ck('pl2_top_'), `${API_BASE}/api/concerts/?${cityQuery()}&limit=30&order=rating&short=1`, 10*60*1000),
   ]).then(rs => rs.map(r => r.status === 'fulfilled' ? r.value : null));
   if(calRes && Array.isArray(calRes.dates)){
     state.datesWithEvents = new Set(calRes.dates);
@@ -217,7 +444,7 @@ async function loadData(){
   }
   // счётчик из кэша — покажем сразу, точное значение приедет с полным пулом
   try{
-    const raw=localStorage.getItem('pl2_total_'+state.todayISO);
+    const raw=localStorage.getItem(ck('pl2_total_'));
     if(raw){ const o=JSON.parse(raw); if(o && o.v) state.upcomingTotalCache=o.v; }
   }catch(e){}
   const toList = (api) => {
@@ -233,7 +460,7 @@ async function loadData(){
     if (!seen.has(c.slug)) { seen.add(c.slug); pool.push(c); }
   }
   if (!pool.length) {
-    const todayEvents = await fetchJSON(`${API_BASE}/map/events/?date=${state.todayISO}`);
+    const todayEvents = await fetchJSON(`${API_BASE}/map/events/?${cityQuery()}&date=${state.todayISO}`);
     if (todayEvents && Array.isArray(todayEvents.events)) {
       for (const c of todayEvents.events.map(normalizeApiEvent).filter(c => c.slug)) {
         if (!seen.has(c.slug)) { seen.add(c.slug); pool.push(c); }
@@ -273,27 +500,56 @@ async function loadData(){
       state.vkUserId=vkId;
       state.vkName=vkName||'';
       state.vkParams=vkParams;
+      // vk-контекст карте — сразу по launch-params, не дожидаясь рекомендаций:
+      // иначе при сбое rec запрос эмоций уходит без vk_user_id и своя эмоция
+      // показывается чужой (is_mine=false). Дальше объект только обогащается.
+      try{
+        window.PermLiveMapVk = window.PermLiveMapVk || {};
+        window.PermLiveMapVk.vk_user_id = String(vkId);
+        if(vkParams) window.PermLiveMapVk.vk_params = vkParams;
+      }catch(e){}
       // без кэша: отрицательный результат не должен залипать
-      const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?vk_user_id=${encodeURIComponent(vkId)}`);
+      const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?${cityQuery()}&vk_user_id=${encodeURIComponent(vkId)}`);
       state.hasAccount = !!(rec && rec.has_user);
-      // для привязанных — реальное имя и аватар из VK для эмоций на карте.
+      // для привязанных — сразу даём карте vk_user_id, чтобы backend отдал
+      // корректный is_mine (не ждём bridge UserInfo — он может не ответить,
+      // и тогда своя эмоция показывалась бы чужой).
       // ME в коде карты — ссылка на этот же объект, мутируем поля, не заменяем.
-      if(state.hasAccount && window.vkBridge){
+      if(state.hasAccount){
         try{
-          const u=await bridge.send('VKWebAppGetUserInfo');
-          if(u && u.id){
-            const fn=(u.first_name||'').trim(), ln=(u.last_name||'').trim();
-            state.vkName=[fn, ln].filter(Boolean).join(' ')||state.vkName;
-            state.vkShortName= fn ? (ln ? `${fn} ${ln.charAt(0)}.` : fn) : state.vkName;
-            state.vkAvatar=u.photo_100||u.photo_200||'';
-            if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
-              Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
-            }
-            window.PermLiveMapVk={vk_user_id: String(u.id), vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||'', vk_avatar: state.vkAvatar||''};
-            // эмоции могли загрузиться раньше без vk_user_id (is_mine=false) — перечитать
-            try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err){}
+          if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
+            Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||vkName||'', avatar: state.vkAvatar||''});
           }
+          window.PermLiveMapVk={vk_user_id: String(vkId), vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||vkName||'', vk_avatar: state.vkAvatar||''};
+          // эмоции могли загрузиться раньше без vk_user_id (is_mine=false) — перечитать
+          try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err){}
         }catch(err){}
+        if(window.vkBridge){
+          try{
+            const u=await bridge.send('VKWebAppGetUserInfo');
+            if(u && u.id){
+              const fn=(u.first_name||'').trim(), ln=(u.last_name||'').trim();
+              state.vkName=[fn, ln].filter(Boolean).join(' ')||state.vkName;
+              state.vkShortName= fn ? (ln ? `${fn} ${ln.charAt(0)}.` : fn) : state.vkName;
+              state.vkAvatar=u.photo_100||u.photo_200||'';
+              if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
+                Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
+              }
+              const uid=String(u.id);
+              if(window.PermLiveMapVk){
+                window.PermLiveMapVk.vk_name=state.vkShortName||state.vkName||'';
+                window.PermLiveMapVk.vk_avatar=state.vkAvatar||'';
+                if(window.PermLiveMapVk.vk_user_id!==uid){
+                  window.PermLiveMapVk.vk_user_id=uid;
+                  try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err2){}
+                }
+              }else{
+                window.PermLiveMapVk={vk_user_id: uid, vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||'', vk_avatar: state.vkAvatar||''};
+                try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err2){}
+              }
+            }
+          }catch(err){}
+        }
       }
       if(rec && Array.isArray(rec.liked_ids)){
         state.likedIds={};
@@ -315,6 +571,9 @@ async function loadData(){
     }
     // сердечки балунов карты — только при привязанном аккаунте
     try{ document.body.classList.toggle('vk-no-account', !state.hasAccount); }catch(e){}
+    // vk_user_id уже выставлен раньше — перечитать эмоции, если карта успела
+    // загрузить их без идентификатора (is_mine=false чинится одним refetch)
+    try{ if(state.vkUserId && window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(e){}
   }catch(e){ console.warn('vk rec failed',e); }
   // если карта уже открыта — перерисовать маркеры с новыми данными
   try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
@@ -924,7 +1183,7 @@ function openSheet(c){
     <p class="sheet__desc">${esc(c.description||'Подробности на permlive.ru')}</p>
     <div style="display:flex;gap:8px;margin-top:6px;color:#a97c00;font-weight:600">${c.price===0? 'Вход свободный' : c.price? `от ${c.price}₽` : ''} ${c.is_paid? '· <span style="color:#e14425">★ Топ</span>':''} <span id="sheet-rating" style="color:#222"><i class="fa-solid fa-star" style="color:#ffc107"></i> ${esc(c.display_rating||c.cached_rating||'')}</span></div>
     <div class="sheet__actions">
-      <a class="pl-btn" href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener"><i class="fas fa-external-link"></i> Открыть на сайте</a>
+      <a class="pl-btn" href="${esc(siteEventUrl(slug))}" target="_blank" rel="noopener"><i class="fas fa-external-link"></i> Открыть на сайте</a>
       <button class="pl-btn pl-btn--secondary" id="sheet-map-btn"><i class="fas fa-map"></i> Показать на карте</button>
     </div>`;
   els.sheet.classList.add('sheet--open');
@@ -952,6 +1211,8 @@ function linkify(s){
     function(m, type, id, t1, t2){ return `<a href="https://vk.com/${type}${id}" target="_blank" rel="noopener">${(t1+' '+t2).trim()}</a>`; });
   t = t.replace(/\[<a[^>]*href="https?:\/\/vk\.(?:com|ru)\/([a-zA-Z0-9_.]+)[^"]*"[^>]*>https?:\/\/vk\.[^|]+\|([^<]+)<\/a>\s*([^\]]*)\]/g,
     function(m, user, t1, t2){ return `<a href="https://vk.com/${user}" target="_blank" rel="noopener">${(t1+' '+t2).trim()}</a>`; });
+  t = t.replace(/\[https?:\/\/vk\.me\/([^|\]]+)\|(.+?)\]/g, '<a href="https://vk.me/$1" target="_blank" rel="noopener">$2</a>');
+  t = t.replace(/\[vk\.me\/([^|\]]+)\|(.+?)\]/g, '<a href="https://vk.me/$1" target="_blank" rel="noopener">$2</a>');
   t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/(event|club|id|public)(\d+)\|(.+?)\]/g, '<a href="https://vk.com/$1$2" target="_blank" rel="noopener">$3</a>');
   t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/([a-zA-Z0-9_.]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
   t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/(wall-?\d+_\d+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
@@ -967,8 +1228,8 @@ function linkify(s){
   });
   // только что созданные <a> тоже прячем перед поиском голых доменов
   t = t.replace(/<a\s[^>]*>.*?<\/a>/gi, function(m){ held.push(m); return `\u0000${held.length-1}\u0000`; });
-  // голые домены
-  t = t.replace(/\b[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.[a-zA-Z]{2,}(?:\/[^\s<>"']*)?/g, '<a href="https://$&" target="_blank" rel="noopener">$&</a>');
+  // голые домены (не глотаем | и ] из VK-разметки)
+  t = t.replace(/\b[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.[a-zA-Z]{2,}(?:\/[^\s<>"'|\[\]]*)?/g, '<a href="https://$&" target="_blank" rel="noopener">$&</a>');
   t = t.replace(/\u0000(\d+)\u0000/g, function(m, i){ return held[+i]; });
   return t.replace(/\n/g, '<br>');
 }
@@ -977,8 +1238,8 @@ function detailFromCache(slug){
 }
 async function fetchDetail(slug){
   if(state.detailCache[slug] && state.detailCache[slug]._full) return state.detailCache[slug];
-  let url = `${API_BASE}/api/concert/${encodeURIComponent(slug)}/`;
-  if(state.vkUserId) url += `?vk_user_id=${encodeURIComponent(state.vkUserId)}`;
+  let url = `${API_BASE}/api/concert/${encodeURIComponent(slug)}/?${cityQuery()}`;
+  if(state.vkUserId) url += `&vk_user_id=${encodeURIComponent(state.vkUserId)}`;
   const j = await fetchJSON(url);
   if(j && j.slug){
     const c = normalizeApiConcert(j);
@@ -1020,7 +1281,7 @@ async function openDetail(slug, push=true){
   const full = await fetchDetail(slug);
   if(state.detailSlug!==slug) return; // ушли дальше
   if(full) renderDetail(full, true);
-  else if(!cached) els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Не удалось загрузить концерт.<br><a href="https://permlive.ru/event/${esc(slug)}/" target="_blank" rel="noopener">Открыть на сайте</a></div>`;
+  else if(!cached) els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Не удалось загрузить концерт.<br><a href="${esc(siteEventUrl(slug))}" target="_blank" rel="noopener">Открыть на сайте</a></div>`;
   wireDetailBack();
 }
 function closeDetail(push=true){
@@ -1086,7 +1347,7 @@ function renderDetail(c, isFull){
   const bands = (c.bands||[]).filter(b=>b && b.name);
   const bandsHTML = bands.length ? `<div class="detail__performers"><h3>Исполнители</h3><div class="detail__performers-row">${bands.map(b=>{
     const av = b.avatar ? `<img src="${esc(b.avatar)}" alt="${esc(b.name)}" loading="lazy">` : `<span class="detail__performer-ph"><i class="fas fa-music"></i></span>`;
-    const href = b.slug ? `https://permlive.ru/menu/bands/${esc(b.slug)}/` : '#';
+    const href = b.slug ? esc(siteUrl('/menu/bands/'+b.slug+'/')) : '#';
     return `<a class="detail__performer" ${b.bg_color? `style="background-color:${esc(b.bg_color)}"`:''} href="${href}" target="_blank" rel="noopener"><span class="detail__performer-av">${av}</span><span class="detail__performer-info"><span class="detail__performer-name">${esc(b.name)}</span>${b.music_style? `<span class="detail__performer-style">${esc(b.music_style)}</span>`:''}</span></a>`;
   }).join('')}</div></div>` : '';
   const similar = (c.similar||[]).filter(s=>s.slug!==c.slug && (!s.date || s.date>=state.todayISO)).slice(0,10);
@@ -1106,8 +1367,8 @@ function renderDetail(c, isFull){
       <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
     </div>
     ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
-    ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
-      : `<div class="detail__site-link"><a href="https://permlive.ru/event/${esc(c.slug)}/" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
+    ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
+      : `<div class="detail__site-link"><a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
     ${similar.length? `<div class="detail__similar"><h3>Похожие концерты</h3><div class="horizontal-slider-row">${similar.map(s=>cardHTML(s,{mode:'similar'})).join('')}</div></div>`:''}
   `;
   wireDetailBack();
@@ -1425,7 +1686,7 @@ function refreshMapMarkers(){
         const coords=c.place?.coordinates||'';
         const [latStr,lngStr]=coords.split(','); const lat=parseFloat(latStr), lng=parseFloat(lngStr);
         return {
-          id:c.id, title:c.title, url:'https://permlive.ru/event/'+(c.slug||'')+'/',
+          id:c.id, title:c.title, url:siteEventUrl(c.slug||''),
           date:c.date, time:c.time||'', price:c.price||0, paid:!!c.is_paid, rating:parseFloat(c.cached_rating||3),
           place:c.place_name||c.place?.name||'', address:c.place?.address||'',
           coordinates:[isFinite(lng)?lng:56.25, isFinite(lat)?lat:58.01],
@@ -1454,7 +1715,7 @@ function refreshMapMarkers(){
 }
 
 async function loadMapForDate(iso){
-  const j=await fetchJSON(`${API_BASE}/map/events/?date=${iso}`);
+  const j=await fetchJSON(`${API_BASE}/map/events/?${cityQuery()}&date=${iso}`);
   if(j && Array.isArray(j.events)){
     const other=state.concerts.filter(c=>c.date!==iso);
     const incoming=j.events.map(normalizeApiEvent).filter(c=>c.slug);
@@ -1545,6 +1806,20 @@ function switchTab(tab, keepHistory){
 }
 
 function wire(){
+  // дропдаун городов — открыть/закрыть
+  if(els.cityBtn && !els.cityBtn._wired){
+    els.cityBtn._wired=true;
+    els.cityBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(els.cityDropdown.classList.contains('open')) closeCityDropdown();
+      else openCityDropdown();
+    });
+  }
+  document.addEventListener('click', function(e){
+    try{
+      if(els.cityDropdown && els.cityDropdown.classList.contains('open') && !els.cityDropdown.contains(e.target)) closeCityDropdown();
+    }catch(err){}
+  });
   // логотип «Живое!» — главная мини-приложения (десктоп и мобильный), а не permlive.ru
   const logoHome=$('#pl-logo-home');
   if(logoHome && !logoHome._wired){ logoHome._wired=true; logoHome.addEventListener('click', function(e){ e.preventDefault(); goHome(); }); }
@@ -1754,7 +2029,7 @@ function wire(){
     toggleLike(blike.getAttribute('data-like-id'), blike);
   }, true);
   // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
-  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); }});
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); try{ closeCityDropdown(); }catch(err){} }});
   window.addEventListener('popstate', e=>{
     if(e.state && e.state.detail){ openDetail(e.state.detail, false); return; }
     if(state.detailSlug){ closeDetail(false); return; }
@@ -1771,8 +2046,14 @@ function wire(){
   wire();
   // календарь в хедере сразу красный (feed активен)
   switchTab('feed', true);
+  // город как на сайте: запомненный — сразу; иначе дефолт + фоновая геопроверка
+  state.city = resolveStoredCity();
+  updateCityUI();
+  renderCityDropdown();
   renderCalendarStrip();
   renderSliderSkeletons();
+  // справочник городов фоном — подтянет названия/счётчики в дропдаун
+  loadCities().then(function(){ updateCityUI(); renderCityDropdown(); }).catch(function(){});
   // insets VK — в фоне, first paint их не ждёт
   (async()=>{
     try{
@@ -1797,6 +2078,19 @@ function wire(){
   await loadData();
   renderCalendarStrip();
   applyFilter();
+  // гео-автоопределение как на сайте: только если город не выбирали вручную
+  // (нет pl_city) и только раз за сессию; диплинк на деталку не перебиваем
+  try{
+    const stored = localStorage.getItem(CITY_LS_KEY);
+    const tried = sessionStorage.getItem(CITY_GEO_TRIED_KEY);
+    const hasDeepLink = /^#\/event\//.test(location.hash||'');
+    if(!stored && !tried && !hasDeepLink){
+      sessionStorage.setItem(CITY_GEO_TRIED_KEY, '1');
+      detectGeoCity().then(function(slug){
+        if(slug && slug!==state.city && !state.detailSlug) switchCity(slug);
+      });
+    }
+  }catch(e){}
   // deep-link на деталку: #/event/<slug>/
   try{
     const m = location.hash.match(/^#\/event\/([^\/]+)\/?$/);

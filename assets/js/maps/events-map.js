@@ -893,25 +893,73 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return !!ed && currentDateStr() === ed;
     }
 
+    var emotionSeq = 0;
+
+    function miniCitySlug() {
+        /* Миник пока одногородный (Пермь), но эмоции уже per-city на бэке:
+           тянем только свой город, иначе московская эмоция блокирует пермскую. */
+        try {
+            var d = window.PermLiveMapData || {};
+            if (d.citySlug) return String(d.citySlug);
+            if (typeof window.citySlugOf === 'function') return window.citySlugOf() || 'perm';
+        } catch (e) {}
+        return 'perm';
+    }
+
     function fetchEmotions() {
-        var emoUrl = '/api/map-emotions/';
+        var mySeq = ++emotionSeq;
+        var slug = miniCitySlug();
+        var emoUrl = '/api/map-emotions/?city=' + encodeURIComponent(slug);
         /* VKMINI: для миника добавляем vk_user_id, чтобы backend отдал корректный is_mine */
         try {
             var vkctx = window.PermLiveMapVk;
-            if (vkctx && vkctx.vk_user_id) emoUrl += '?vk_user_id=' + encodeURIComponent(vkctx.vk_user_id);
+            if (vkctx && vkctx.vk_user_id) emoUrl += '&vk_user_id=' + encodeURIComponent(vkctx.vk_user_id);
         } catch (e) {}
         fetch(emoUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (mySeq !== emotionSeq) return;
                 if (!data || !data.emotions) return;
-                state.emotions = data.emotions;
+                var list = data.emotions;
+                try {
+                    list = list.filter(function (em) {
+                        return !em.city_slug || em.city_slug === slug;
+                    });
+                } catch (e2) {}
+                state.emotions = list;
                 applyEmotionLayer();
             })
             .catch(function () {});
     }
 
     function addEmotion(em) {
-        state.emotions.push(em);
+        if (!em) return;
+        /* Ответы GET, ушедших до создания эмоции, устарели — игнорируем их,
+           иначе свежая эмоция (is_mine) затрется списком без неё. */
+        emotionSeq++;
+        em.is_mine = true;
+        try {
+            var cur = miniCitySlug();
+            if (em.city_slug && em.city_slug !== cur) {
+                for (var k = 0; k < state.emotions.length; k++) {
+                    if (String(state.emotions[k].id) === String(em.id)) {
+                        state.emotions.splice(k, 1);
+                        break;
+                    }
+                }
+                applyEmotionLayer();
+                return;
+            }
+        } catch (e) {}
+        var replaced = false;
+        for (var i = 0; i < state.emotions.length; i++) {
+            if (String(state.emotions[i].id) === String(em.id)) {
+                state.emotions[i] = em;
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) state.emotions.push(em);
         applyEmotionLayer();
     }
 
@@ -981,8 +1029,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function myActiveEmotion() {
+        var cur = miniCitySlug();
         for (var i = 0; i < state.emotions.length; i++) {
-            if (state.emotions[i].is_mine) return state.emotions[i];
+            var em = state.emotions[i];
+            if (!em || !em.is_mine) continue;
+            if (em.city_slug && em.city_slug !== cur) continue;
+            return em;
         }
         return null;
     }
@@ -1397,7 +1449,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             return;
         }
         if (myActiveEmotion()) {
-            showToast('У вас уже есть эмоция на карте. Удалите её, чтобы поставить новую');
+            showToast('У вас уже есть эмоция в этом городе. Удалите её, чтобы поставить новую');
             return;
         }
         if (window.__PermLiveMapEmotionOpen) return;
@@ -1636,6 +1688,19 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (!t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion')) return true;
         }
         return false;
+    }
+
+    /* Селектор интерфейса поверх карты: календарь, кнопки, балуны, композеры.
+       Тап по нему не должен уходить пинам/кластерам, даже если те геометрически
+       под интерфейсом (elementsFromPoint их находит сквозь модалку). */
+    var MAP_UI_SEL = '.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
+        '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
+        '.pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, ' +
+        '.pl-map-calendar-modal, .pl-map-calendar-overlay';
+    function overlayTarget(t) {
+        if (!t || !t.closest) return false;
+        if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion')) return false;
+        return !!t.closest(MAP_UI_SEL);
     }
 
     var flowerTap = null;
@@ -2395,7 +2460,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             document.addEventListener('pointerdown', function (e) {
             var top = null;
             try { top = document.elementFromPoint(e.clientX, e.clientY); } catch (err) { top = e.target; }
-            if (top && top.closest && top.closest('.pl-map-balloon, .pl-map-emotion-pop')) {
+            if (overlayTarget(top) || overlayTarget(e.target)) {
                 pressedEl = null;
                 pressedXY = null;
                 return;
@@ -2424,7 +2489,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         document.addEventListener('mousedown', function (e) {
             var top2 = null;
             try { top2 = document.elementFromPoint(e.clientX, e.clientY); } catch (err) { top2 = e.target; }
-            if (top2 && top2.closest && top2.closest('.pl-map-balloon, .pl-map-emotion-pop')) return;
+            if (overlayTarget(top2) || overlayTarget(e.target)) return;
             var pick2 = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin, .pl-map-cluster, .pl-map-emotion');
             if (pick2) {
                 e.preventDefault();
@@ -2469,8 +2534,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                     pressedXY = null;
                     return;
                 }
-                if (target.closest('.pl-map-balloon, .pl-map-emotion-pop')) {
-
+                /* Клик по интерфейсу поверх карты (календарь, кнопки, балуны):
+                   отдаём его владельцевым обработчикам, пины под ним не трогаем. */
+                if (overlayTarget(target)) {
                     pressedEl = null;
                     pressedXY = null;
                     return;
