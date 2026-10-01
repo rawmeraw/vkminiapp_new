@@ -27,18 +27,34 @@
   <link rel="stylesheet" href="./assets/css/maps.css?v=20260911">
 </head>
 <body>
-  <!-- Header — без футера, навигация в хедере -->
+  <!-- Header как на сайте: заголовок + дропдаун городов + дропдаун разделов -->
   <header class="pl-header">
     <div class="pl-header__inner">
       <a class="pl-logo" href="./" id="pl-logo-home" aria-label="На главную">
         <img class="pl-logo__img" src="./assets/img/logo.png" alt="Живое!" width="28" height="28">
-        <span class="pl-logo__text">Живое!</span>
+        <span class="pl-logo__text" id="header-city-title">Карта событий Перми</span>
       </a>
-      <nav class="pl-header-nav" aria-label="Навигация">
-        <a href="#" class="pl-header-link" data-nav="calendar"><i class="fa-solid fa-calendar"></i><span>Календарь</span></a>
-        <a href="#" class="pl-header-link" data-nav="map"><i class="fa-solid fa-map-location-dot"></i><span>Карта</span></a>
-        <a href="#" class="pl-header-link" data-nav="add"><i class="fa-solid fa-plus"></i><span>Предложить концерт</span></a>
-      </nav>
+      <div class="city-dropdown" id="city-dropdown" data-current="perm">
+        <button type="button" class="city-dropdown-btn" id="city-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Выбор города">
+          <i class="fa-solid fa-city"></i>
+          <span id="city-dropdown-label">Пермь</span>
+          <i class="fa-solid fa-chevron-down city-dropdown-chevron"></i>
+        </button>
+        <div class="city-dropdown-menu" id="city-dropdown-menu" role="menu"></div>
+      </div>
+      <div class="sections-dropdown" id="sections-dropdown">
+        <button type="button" class="sections-dropdown-btn" id="sections-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Разделы афиши">
+          <i id="sections-dropdown-icon" class="far fa-calendar-alt"></i>
+          <span id="sections-dropdown-label">Календарь</span>
+          <i class="fa-solid fa-chevron-down sections-dropdown-chevron"></i>
+        </button>
+        <div class="sections-dropdown-menu" id="sections-dropdown-menu" role="menu">
+          <a class="sections-dropdown-item" role="menuitem" href="#" data-section="feed"><i class="far fa-calendar-alt"></i><span>Календарь</span><i class="fa-solid fa-check" style="display:none"></i></a>
+          <a class="sections-dropdown-item" role="menuitem" href="#" data-section="map"><i class="fa-solid fa-location-dot"></i><span>Карта</span><i class="fa-solid fa-check" style="display:none"></i></a>
+          <a class="sections-dropdown-item" role="menuitem" href="#" data-section="timeline"><i class="fa-solid fa-list-ul"></i><span>Таймлайн</span><i class="fa-solid fa-check" style="display:none"></i></a>
+          <a class="sections-dropdown-item" role="menuitem" href="#" data-section="add"><i class="fa-solid fa-plus"></i><span>Предложить событие</span><i class="fa-solid fa-check" style="display:none"></i></a>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -46,30 +62,7 @@
   <main id="app">
     <!-- FEED TAB -->
     <section id="view-feed" class="view view--active">
-      <!-- Topbar как в шапке сайта: слева город, справа разделы афиши -->
-      <div class="feed-topbar">
-        <div class="city-dropdown" id="city-dropdown" data-current="perm">
-          <button type="button" class="city-dropdown-btn" id="city-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Выбор города">
-            <i class="fa-solid fa-city"></i>
-            <span id="city-dropdown-label">Пермь</span>
-            <i class="fa-solid fa-chevron-down city-dropdown-chevron"></i>
-          </button>
-          <div class="city-dropdown-menu" id="city-dropdown-menu" role="menu"></div>
-        </div>
-        <div class="sections-dropdown" id="sections-dropdown">
-          <button type="button" class="sections-dropdown-btn" id="sections-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Разделы афиши">
-            <i id="sections-dropdown-icon" class="far fa-calendar-alt"></i>
-            <span id="sections-dropdown-label">Календарь</span>
-            <i class="fa-solid fa-chevron-down sections-dropdown-chevron"></i>
-          </button>
-          <div class="sections-dropdown-menu" id="sections-dropdown-menu" role="menu">
-            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="feed"><i class="far fa-calendar-alt"></i><span>Календарь</span><i class="fa-solid fa-check" style="display:none"></i></a>
-            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="map"><i class="fa-solid fa-location-dot"></i><span>Карта</span><i class="fa-solid fa-check" style="display:none"></i></a>
-            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="timeline"><i class="fa-solid fa-list-ul"></i><span>Таймлайн</span><i class="fa-solid fa-check" style="display:none"></i></a>
-          </div>
-        </div>
-      </div>
-      <!-- Calendar as on site — месяц слева выше ленты -->
+      <!-- Calendar as on site — месяц слева выше ленты, навигация переехала в хедер -->
       <div id="feed-calendar-wrap" class="feed-calendar-wrap">
         <div class="calendar-month-label" id="calendar-month-label"></div>
         <div id="feed-calendar" class="feed-calendar">
@@ -143,7 +136,7 @@
           <p id="timeline-empty-text"><i class="fas fa-calendar-xmark"></i> На эту дату концертов нет</p>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
             <button id="btn-show-all" class="pl-btn">Показать все ближайшие</button>
-            <button id="btn-propose" class="pl-btn pl-btn--light" style="display:none">Предложить концерт</button>
+            <button id="btn-propose" class="pl-btn pl-btn--light" style="display:none">Предложить событие</button>
           </div>
         </div>
       </div>
@@ -163,8 +156,8 @@
     <!-- ADD TAB -->
     <section id="view-add" class="view">
       <div class="add-page" style="max-width:600px;margin:0 auto;padding:24px 0">
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Предложить концерт</h2>
-        <p style="color:#666;margin-bottom:16px">Не нашел концерт в списке? Закинь ссылку, добавлю!</p>
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Предложить событие</h2>
+        <p style="color:#666;margin-bottom:16px">Не нашел событие в списке? Закинь ссылку, добавлю!</p>
         <form id="add-form" style="display:flex;gap:8px">
           <input id="add-link" type="text" placeholder="vk.ru/wall..." required style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font-size:14px">
           <button type="submit" class="pl-btn">Отправить</button>

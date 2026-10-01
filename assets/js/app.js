@@ -191,10 +191,10 @@ const CITY_GEO_TRIED_KEY = 'pl_city_geo_tried';
 const CITY_GEO_RADIUS_KM = 150;
 // Фолбэк из справочника City (синхронизирован с БД; точные данные — /api/cities/)
 const CITY_FALLBACK = [
-  {slug:'perm', name:'Пермь', full_name:'Пермь', lat:58.0095, lon:56.2778, is_default:true},
-  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', lat:56.8389, lon:60.6057, is_default:false},
-  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', lat:56.8527, lon:53.2115, is_default:false},
-  {slug:'moscow', name:'Москва', full_name:'Москва', lat:55.7558, lon:37.6173, is_default:false},
+  {slug:'perm', name:'Пермь', full_name:'Пермь', genitive:'Перми', lat:58.0095, lon:56.2778, is_default:true},
+  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', genitive:'Екатеринбурга', lat:56.8389, lon:60.6057, is_default:false},
+  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', lat:56.8527, lon:53.2115, is_default:false},
+  {slug:'moscow', name:'Москва', full_name:'Москва', genitive:'Москвы', lat:55.7558, lon:37.6173, is_default:false},
 ];
 // Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
 window.citySlugOf = function(){ return state.city || 'perm'; };
@@ -237,7 +237,7 @@ function ck(base){
 
 async function loadCities(){
   try{
-    const raw = localStorage.getItem('pl_cities_v1');
+    const raw = localStorage.getItem('pl_cities_v2');
     if(raw){
       const o = JSON.parse(raw);
       if(o && o.t && Date.now()-o.t < 10*60*1000 && Array.isArray(o.v) && o.v.length){
@@ -249,7 +249,7 @@ async function loadCities(){
   const j = await fetchJSON(`${API_BASE}/api/cities/`);
   if(j && Array.isArray(j.cities) && j.cities.length){
     state.cities = j.cities;
-    try{ localStorage.setItem('pl_cities_v1', JSON.stringify({t:Date.now(), v:j.cities})); }catch(e){}
+    try{ localStorage.setItem('pl_cities_v2', JSON.stringify({t:Date.now(), v:j.cities})); }catch(e){}
   } else if(!state.cities.length){
     state.cities = CITY_FALLBACK.slice();
   }
@@ -354,6 +354,11 @@ function updateCityUI(){
   const c = cityBySlug(state.city);
   if(els.cityDropdown) els.cityDropdown.setAttribute('data-current', state.city);
   if(els.cityLabel && c) els.cityLabel.textContent = c.name;
+  // Заголовок хедера как на сайте: «Карта событий Перми/Москвы/...»
+  try{
+    const titleEl = document.getElementById('header-city-title');
+    if(titleEl && c) titleEl.textContent = 'Карта событий ' + (c.genitive || c.name);
+  }catch(e){}
   if(els.cityMenu){
     els.cityMenu.querySelectorAll('[data-city-slug]').forEach(function(a){
       const active = a.getAttribute('data-city-slug')===state.city;
@@ -388,9 +393,10 @@ function closeCityDropdown(){
   if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','false');
 }
 
-// ---------- Sections dropdown: Календарь/Карта/Таймлайн, как nav-dropdown на сайте ----------
+// ---------- Sections dropdown: Календарь/Карта/Таймлайн/Предложить, как nav-dropdown на сайте ----------
 function currentSection(){
   if(state.tab==='map') return 'map';
+  if(state.tab==='add') return 'add';
   if(state.timelineMode) return 'timeline';
   return 'feed';
 }
@@ -400,6 +406,7 @@ function updateSectionsUI(){
     feed: {label:'Календарь', icon:'far fa-calendar-alt'},
     map: {label:'Карта', icon:'fa-solid fa-location-dot'},
     timeline: {label:'Таймлайн', icon:'fa-solid fa-list-ul'},
+    add: {label:'Предложить событие', icon:'fa-solid fa-plus'},
   }[sec] || {label:'Календарь', icon:'far fa-calendar-alt'};
   if(els.sectionsLabel) els.sectionsLabel.textContent = conf.label;
   if(els.sectionsIcon) els.sectionsIcon.className = conf.icon;
@@ -1918,22 +1925,15 @@ function wire(){
         closeSectionsDropdown();
         if(sec==='map') switchTab('map');
         else if(sec==='timeline') openUpcomingTimeline();
+        else if(sec==='add') switchTab('add');
         else goHome();
       });
     });
   }
-  // логотип «Живое!» — главная мини-приложения (десктоп и мобильный), а не permlive.ru
+  // логотип-заголовок — главная мини-приложения (десктоп и мобильный), а не permlive.ru
   const logoHome=$('#pl-logo-home');
   if(logoHome && !logoHome._wired){ logoHome._wired=true; logoHome.addEventListener('click', function(e){ e.preventDefault(); goHome(); }); }
-  // header nav (desktop) + footer nav (mobile) — обе должны кликаться
-  $$('.pl-header-link').forEach(a=>{
-    a.addEventListener('click', function(e){
-      e.preventDefault();
-      const nav=this.dataset.nav;
-      if(nav==='calendar') switchTab('calendar');
-      else switchTab(nav);
-    });
-  });
+  // footer nav (mobile) — разделы также есть в дропдауне хедера
   $$('.pl-tabbar__btn').forEach(b=>{
     b.addEventListener('click', function(e){
       e.preventDefault();

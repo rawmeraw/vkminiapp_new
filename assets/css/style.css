@@ -96,9 +96,17 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .calendar-arrow{width:32px;height:32px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .calendar-arrow.hidden{opacity:0;pointer-events:none}
 
-/* Feed topbar как в шапке сайта: слева город, справа разделы афиши */
-.feed-topbar{display:flex;align-items:center;gap:8px;padding:12px 0 0}
-.city-dropdown{position:relative;padding:0;z-index:50}
+/* Дропдауны в хедере: город + разделы. Меню поверх контента (хедер z-1000). */
+.city-dropdown{position:relative;padding:0;z-index:50;flex:none}
+.pl-header__inner{gap:8px}
+.pl-header .city-dropdown-btn,.pl-header .sections-dropdown-btn{padding:7px 11px;font-size:13px;white-space:nowrap}
+.pl-logo{min-width:0;flex:1 1 auto}
+.pl-logo__text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:768px){
+  .pl-logo__text{font-size:15px}
+  .pl-header__inner{padding:0 10px}
+  .pl-header .city-dropdown-btn,.pl-header .sections-dropdown-btn{padding:6px 9px;font-size:12px;gap:6px}
+}
 .sections-dropdown{position:relative;margin-left:auto;z-index:50}
 .sections-dropdown-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;color:var(--dark);cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 .sections-dropdown-btn>i:first-child{color:var(--red)}
