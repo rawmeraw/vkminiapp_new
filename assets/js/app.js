@@ -453,14 +453,22 @@ function closeSectionsDropdown(){
   els.sectionsDropdown.classList.remove('open');
   if(els.sectionsBtn) els.sectionsBtn.setAttribute('aria-expanded','false');
 }
-// Подсветка кнопки «Таймлайн» в мобильном таббаре (у неё нет data-tab)
+// Подсветка «Календарь/Таймлайн» в мобильном таббаре: активна только одна.
+// У кнопки таймлайна нет data-tab, поэтому парой управляем здесь целиком.
 function syncTabbarTimeline(){
   try{
-    const btn = document.getElementById('tabbar-timeline');
-    if(!btn) return;
-    const active = currentSection()==='timeline';
-    btn.classList.toggle('pl-tabbar__btn--active', active);
-    btn.setAttribute('aria-selected', String(active));
+    const isTimeline = currentSection()==='timeline';
+    const tbtn = document.getElementById('tabbar-timeline');
+    if(tbtn){
+      tbtn.classList.toggle('pl-tabbar__btn--active', isTimeline);
+      tbtn.setAttribute('aria-selected', String(isTimeline));
+    }
+    // лента активна только когда таб feed и это не таймлайн
+    document.querySelectorAll('.pl-tabbar__btn[data-tab="feed"]').forEach(function(f){
+      const feedActive = (state.tab==='feed' && !isTimeline);
+      f.classList.toggle('pl-tabbar__btn--active', feedActive);
+      f.setAttribute('aria-selected', String(feedActive));
+    });
   }catch(e){}
 }
 function openUpcomingTimeline(){
