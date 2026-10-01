@@ -63,6 +63,11 @@ const els = {
   cityBtn: $('#city-dropdown-btn'),
   cityMenu: $('#city-dropdown-menu'),
   cityLabel: $('#city-dropdown-label'),
+  sectionsDropdown: $('#sections-dropdown'),
+  sectionsBtn: $('#sections-dropdown-btn'),
+  sectionsMenu: $('#sections-dropdown-menu'),
+  sectionsLabel: $('#sections-dropdown-label'),
+  sectionsIcon: $('#sections-dropdown-icon'),
 };
 
 // --- timezone Ekaterinburg (Asia/Yekaterinburg UTC+5) ---
@@ -372,6 +377,7 @@ function updateCityUI(){
 
 function openCityDropdown(){
   if(!els.cityDropdown) return;
+  closeSectionsDropdown();
   renderCityDropdown();
   els.cityDropdown.classList.add('open');
   if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','true');
@@ -380,6 +386,55 @@ function closeCityDropdown(){
   if(!els.cityDropdown) return;
   els.cityDropdown.classList.remove('open');
   if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','false');
+}
+
+// ---------- Sections dropdown: Календарь/Карта/Таймлайн, как nav-dropdown на сайте ----------
+function currentSection(){
+  if(state.tab==='map') return 'map';
+  if(state.timelineMode) return 'timeline';
+  return 'feed';
+}
+function updateSectionsUI(){
+  const sec = currentSection();
+  const conf = {
+    feed: {label:'Календарь', icon:'far fa-calendar-alt'},
+    map: {label:'Карта', icon:'fa-solid fa-location-dot'},
+    timeline: {label:'Таймлайн', icon:'fa-solid fa-list-ul'},
+  }[sec] || {label:'Календарь', icon:'far fa-calendar-alt'};
+  if(els.sectionsLabel) els.sectionsLabel.textContent = conf.label;
+  if(els.sectionsIcon) els.sectionsIcon.className = conf.icon;
+  if(els.sectionsMenu){
+    els.sectionsMenu.querySelectorAll('[data-section]').forEach(function(a){
+      const active = a.getAttribute('data-section')===sec;
+      a.classList.toggle('active', active);
+      const check = a.querySelector('.fa-check');
+      if(check) check.style.display = active ? '' : 'none';
+    });
+  }
+}
+function openSectionsDropdown(){
+  if(!els.sectionsDropdown) return;
+  closeCityDropdown();
+  updateSectionsUI();
+  els.sectionsDropdown.classList.add('open');
+  if(els.sectionsBtn) els.sectionsBtn.setAttribute('aria-expanded','true');
+}
+function closeSectionsDropdown(){
+  if(!els.sectionsDropdown) return;
+  els.sectionsDropdown.classList.remove('open');
+  if(els.sectionsBtn) els.sectionsBtn.setAttribute('aria-expanded','false');
+}
+function openUpcomingTimeline(){
+  // Таймлайн как на сайте: вся upcoming-лента текущего города
+  try{ closeSheet(); }catch(e){}
+  try{ closeCalendar(); }catch(e){}
+  if(state.detailSlug){ try{ closeDetail(false); }catch(e){} }
+  if(state.tab!=='feed') switchTab('feed', true);
+  state.query='';
+  if(els.searchInput){ els.searchInput.value=''; const sc=$('#search-clear'); if(sc) sc.style.display='none'; }
+  state.selectedDate=null;
+  state.range=null;
+  openTimeline('upcoming');
 }
 
 async function switchCity(slug, opts){
@@ -1169,6 +1224,7 @@ function applyFilter(){
     // don't render timeline when hidden to avoid empty group logic
   }
   renderSliders();
+  try{ updateSectionsUI(); }catch(e){}
 }
 
 function openTimeline(type){
@@ -1823,6 +1879,7 @@ function switchTab(tab, keepHistory){
       if(location.hash && location.hash.startsWith('#/event/')) history.pushState({tab}, '', url);
     }catch(e){}
   }
+  try{ updateSectionsUI(); }catch(e){}
   window.scrollTo({top:0,behavior: tab==='map' ? 'auto' : 'smooth'});
 }
 
@@ -1839,8 +1896,32 @@ function wire(){
   document.addEventListener('click', function(e){
     try{
       if(els.cityDropdown && els.cityDropdown.classList.contains('open') && !els.cityDropdown.contains(e.target)) closeCityDropdown();
+      if(els.sectionsDropdown && els.sectionsDropdown.classList.contains('open') && !els.sectionsDropdown.contains(e.target)) closeSectionsDropdown();
     }catch(err){}
   });
+  // дропдаун разделов — открыть/закрыть + выбор
+  if(els.sectionsBtn && !els.sectionsBtn._wired){
+    els.sectionsBtn._wired=true;
+    els.sectionsBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(els.sectionsDropdown.classList.contains('open')) closeSectionsDropdown();
+      else openSectionsDropdown();
+    });
+  }
+  if(els.sectionsMenu && !els.sectionsMenu._wired){
+    els.sectionsMenu._wired=true;
+    els.sectionsMenu.querySelectorAll('[data-section]').forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        const sec = a.getAttribute('data-section');
+        closeSectionsDropdown();
+        if(sec==='map') switchTab('map');
+        else if(sec==='timeline') openUpcomingTimeline();
+        else goHome();
+      });
+    });
+  }
   // логотип «Живое!» — главная мини-приложения (десктоп и мобильный), а не permlive.ru
   const logoHome=$('#pl-logo-home');
   if(logoHome && !logoHome._wired){ logoHome._wired=true; logoHome.addEventListener('click', function(e){ e.preventDefault(); goHome(); }); }
@@ -2050,7 +2131,7 @@ function wire(){
     toggleLike(blike.getAttribute('data-like-id'), blike);
   }, true);
   // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
-  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); try{ closeCityDropdown(); }catch(err){} }});
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); try{ closeCityDropdown(); closeSectionsDropdown(); }catch(err){} }});
   window.addEventListener('popstate', e=>{
     if(e.state && e.state.detail){ openDetail(e.state.detail, false); return; }
     if(state.detailSlug){ closeDetail(false); return; }
@@ -2071,6 +2152,7 @@ function wire(){
   state.city = resolveStoredCity();
   updateCityUI();
   renderCityDropdown();
+  updateSectionsUI();
   renderCalendarStrip();
   renderSliderSkeletons();
   // справочник городов фоном — подтянет названия/счётчики в дропдаун

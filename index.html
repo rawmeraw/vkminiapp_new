@@ -46,14 +46,28 @@
   <main id="app">
     <!-- FEED TAB -->
     <section id="view-feed" class="view view--active">
-      <!-- City dropdown — перед календарём, как в шапке сайта -->
-      <div class="city-dropdown" id="city-dropdown" data-current="perm">
-        <button type="button" class="city-dropdown-btn" id="city-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Выбор города">
-          <i class="fa-solid fa-city"></i>
-          <span id="city-dropdown-label">Пермь</span>
-          <i class="fa-solid fa-chevron-down city-dropdown-chevron"></i>
-        </button>
-        <div class="city-dropdown-menu" id="city-dropdown-menu" role="menu"></div>
+      <!-- Topbar как в шапке сайта: слева город, справа разделы афиши -->
+      <div class="feed-topbar">
+        <div class="city-dropdown" id="city-dropdown" data-current="perm">
+          <button type="button" class="city-dropdown-btn" id="city-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Выбор города">
+            <i class="fa-solid fa-city"></i>
+            <span id="city-dropdown-label">Пермь</span>
+            <i class="fa-solid fa-chevron-down city-dropdown-chevron"></i>
+          </button>
+          <div class="city-dropdown-menu" id="city-dropdown-menu" role="menu"></div>
+        </div>
+        <div class="sections-dropdown" id="sections-dropdown">
+          <button type="button" class="sections-dropdown-btn" id="sections-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Разделы афиши">
+            <i id="sections-dropdown-icon" class="far fa-calendar-alt"></i>
+            <span id="sections-dropdown-label">Календарь</span>
+            <i class="fa-solid fa-chevron-down sections-dropdown-chevron"></i>
+          </button>
+          <div class="sections-dropdown-menu" id="sections-dropdown-menu" role="menu">
+            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="feed"><i class="far fa-calendar-alt"></i><span>Календарь</span><i class="fa-solid fa-check" style="display:none"></i></a>
+            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="map"><i class="fa-solid fa-location-dot"></i><span>Карта</span><i class="fa-solid fa-check" style="display:none"></i></a>
+            <a class="sections-dropdown-item" role="menuitem" href="#" data-section="timeline"><i class="fa-solid fa-list-ul"></i><span>Таймлайн</span><i class="fa-solid fa-check" style="display:none"></i></a>
+          </div>
+        </div>
       </div>
       <!-- Calendar as on site — месяц слева выше ленты -->
       <div id="feed-calendar-wrap" class="feed-calendar-wrap">
