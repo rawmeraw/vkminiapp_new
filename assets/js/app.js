@@ -393,10 +393,10 @@ function closeCityDropdown(){
   if(els.cityBtn) els.cityBtn.setAttribute('aria-expanded','false');
 }
 
-// ---------- Sections dropdown: Календарь/Карта/Таймлайн/Предложить, как nav-dropdown на сайте ----------
+// ---------- Sections dropdown: Календарь/Карта/Таймлайн, как nav-dropdown на сайте ----------
+// «Предложить событие» — отдельная кнопка справа, не пункт меню.
 function currentSection(){
   if(state.tab==='map') return 'map';
-  if(state.tab==='add') return 'add';
   if(state.timelineMode) return 'timeline';
   return 'feed';
 }
@@ -406,7 +406,6 @@ function updateSectionsUI(){
     feed: {label:'Календарь', icon:'far fa-calendar-alt'},
     map: {label:'Карта', icon:'fa-solid fa-location-dot'},
     timeline: {label:'Таймлайн', icon:'fa-solid fa-list-ul'},
-    add: {label:'Предложить событие', icon:'fa-solid fa-plus'},
   }[sec] || {label:'Календарь', icon:'far fa-calendar-alt'};
   if(els.sectionsLabel) els.sectionsLabel.textContent = conf.label;
   if(els.sectionsIcon) els.sectionsIcon.className = conf.icon;
@@ -1925,9 +1924,19 @@ function wire(){
         closeSectionsDropdown();
         if(sec==='map') switchTab('map');
         else if(sec==='timeline') openUpcomingTimeline();
-        else if(sec==='add') switchTab('add');
         else goHome();
       });
+    });
+  }
+  // кнопка «Предложить событие» справа в навигации
+  const proposeBtn=$('#propose-btn');
+  if(proposeBtn && !proposeBtn._wired){
+    proposeBtn._wired=true;
+    proposeBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      try{ closeCityDropdown(); closeSectionsDropdown(); }catch(err){}
+      switchTab('add');
     });
   }
   // логотип-заголовок — главная мини-приложения (десктоп и мобильный), а не permlive.ru

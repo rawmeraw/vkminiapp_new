@@ -107,6 +107,15 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
   .pl-header__inner{padding:0 10px}
   .pl-header .city-dropdown-btn,.pl-header .sections-dropdown-btn{padding:6px 9px;font-size:12px;gap:6px}
 }
+/* Кнопка «Предложить событие» — отдельный акцент справа в навигации */
+.propose-btn{display:inline-flex;align-items:center;gap:7px;border:0;background:var(--red);color:#fff;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 2px 8px rgba(225,68,37,.35);flex:none}
+.propose-btn:hover{background:#c9331a;color:#fff}
+.propose-btn i{font-size:12px}
+@media (max-width:768px){
+  /* на смартфоне — круглая кнопка-плюс, места в хедере мало */
+  .propose-btn span{display:none}
+  .propose-btn{border-radius:50%;width:30px;height:30px;padding:0;justify-content:center;gap:0}
+}
 .sections-dropdown{position:relative;margin-left:auto;z-index:50}
 .sections-dropdown-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;color:var(--dark);cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.06)}
 .sections-dropdown-btn>i:first-child{color:var(--red)}
