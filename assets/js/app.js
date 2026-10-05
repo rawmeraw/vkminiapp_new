@@ -73,7 +73,7 @@ const els = {
 // --- timezone: «сегодня» в поясе текущего города, как get_city_today() на сайте ---
 // Карта поясов здесь (а не ниже): функция вызывается из инициализатора state,
 // когда нижние const ещё в TDZ — тут только function/var, безопасно.
-var CITY_TZ_MAP = {perm:'Asia/Yekaterinburg', ekb:'Asia/Yekaterinburg', izhevsk:'Europe/Samara', moscow:'Europe/Moscow'};
+var CITY_TZ_MAP = {perm:'Asia/Yekaterinburg', ekb:'Asia/Yekaterinburg', ufa:'Asia/Yekaterinburg', chelyabinsk:'Asia/Yekaterinburg', tyumen:'Asia/Yekaterinburg', izhevsk:'Europe/Samara', samara:'Europe/Samara', moscow:'Europe/Moscow', spb:'Europe/Moscow', kazan:'Europe/Moscow', nizhniy:'Europe/Moscow', rostov:'Europe/Moscow', krasnodar:'Europe/Moscow', kirov:'Europe/Moscow', novosibirsk:'Asia/Novosibirsk'};
 function currentCitySlugSafe(){
   try{ if(typeof state!=='undefined' && state && state.city) return state.city; }catch(e){}
   return null;
@@ -214,10 +214,21 @@ const CITY_GEO_TRIED_KEY = 'pl_city_geo_tried';
 const CITY_GEO_RADIUS_KM = 150;
 // Фолбэк из справочника City (синхронизирован с БД; точные данные — /api/cities/)
 const CITY_FALLBACK = [
-  {slug:'perm', name:'Пермь', full_name:'Пермь', genitive:'Перми', timezone:'Asia/Yekaterinburg', lat:58.0095, lon:56.2778, is_default:true},
-  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', genitive:'Екатеринбурга', timezone:'Asia/Yekaterinburg', lat:56.8389, lon:60.6057, is_default:false},
-  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', timezone:'Europe/Samara', lat:56.8527, lon:53.2115, is_default:false},
-  {slug:'moscow', name:'Москва', full_name:'Москва', genitive:'Москвы', timezone:'Europe/Moscow', lat:55.7558, lon:37.6173, is_default:false},
+  {slug:'perm', name:'Пермь', full_name:'Пермь', genitive:'Перми', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:58.0095, lon:56.2778, is_default:true},
+  {slug:'moscow', name:'Москва', full_name:'Москва', genitive:'Москвы', timezone:'Europe/Moscow', utc_offset:3, lat:55.7558, lon:37.6173, is_default:false},
+  {slug:'spb', name:'Санкт-Петербург', full_name:'Санкт-Петербург', genitive:'Санкт-Петербурга', timezone:'Europe/Moscow', utc_offset:3, lat:59.9343, lon:30.3351, is_default:false},
+  {slug:'novosibirsk', name:'Новосибирск', full_name:'Новосибирск', genitive:'Новосибирска', timezone:'Asia/Novosibirsk', utc_offset:7, lat:55.0302, lon:82.9204, is_default:false},
+  {slug:'ekb', name:'Екатеринбург', full_name:'Екатеринбург', genitive:'Екатеринбурга', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:56.8389, lon:60.6057, is_default:false},
+  {slug:'kazan', name:'Казань', full_name:'Казань', genitive:'Казани', timezone:'Europe/Moscow', utc_offset:3, lat:55.7887, lon:49.1221, is_default:false},
+  {slug:'nizhniy', name:'Нижний Новгород', full_name:'Нижний Новгород', genitive:'Нижнего Новгорода', timezone:'Europe/Moscow', utc_offset:3, lat:56.2965, lon:43.9361, is_default:false},
+  {slug:'chelyabinsk', name:'Челябинск', full_name:'Челябинск', genitive:'Челябинска', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:55.1644, lon:61.4368, is_default:false},
+  {slug:'ufa', name:'Уфа', full_name:'Уфа', genitive:'Уфы', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:54.7388, lon:55.9721, is_default:false},
+  {slug:'krasnodar', name:'Краснодар', full_name:'Краснодар', genitive:'Краснодара', timezone:'Europe/Moscow', utc_offset:3, lat:45.0355, lon:38.9753, is_default:false},
+  {slug:'rostov', name:'Ростов-на-Дону', full_name:'Ростов-на-Дону', genitive:'Ростова-на-Дону', timezone:'Europe/Moscow', utc_offset:3, lat:47.2224, lon:39.7189, is_default:false},
+  {slug:'samara', name:'Самара', full_name:'Самара', genitive:'Самары', timezone:'Europe/Samara', utc_offset:4, lat:53.1959, lon:50.1002, is_default:false},
+  {slug:'tyumen', name:'Тюмень', full_name:'Тюмень', genitive:'Тюмени', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:57.1522, lon:65.5412, is_default:false},
+  {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', timezone:'Europe/Samara', utc_offset:4, lat:56.8527, lon:53.2115, is_default:false},
+  {slug:'kirov', name:'Киров', full_name:'Киров', genitive:'Кирова', timezone:'Europe/Moscow', utc_offset:3, lat:58.6035, lon:49.6668, is_default:false},
 ];
 // Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
 window.citySlugOf = function(){ return state.city || 'perm'; };
