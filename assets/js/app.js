@@ -73,7 +73,7 @@ const els = {
 // --- timezone: «сегодня» в поясе текущего города, как get_city_today() на сайте ---
 // Карта поясов здесь (а не ниже): функция вызывается из инициализатора state,
 // когда нижние const ещё в TDZ — тут только function/var, безопасно.
-var CITY_TZ_MAP = {perm:'Asia/Yekaterinburg', ekb:'Asia/Yekaterinburg', ufa:'Asia/Yekaterinburg', chelyabinsk:'Asia/Yekaterinburg', tyumen:'Asia/Yekaterinburg', izhevsk:'Europe/Samara', samara:'Europe/Samara', moscow:'Europe/Moscow', spb:'Europe/Moscow', kazan:'Europe/Moscow', nizhniy:'Europe/Moscow', rostov:'Europe/Moscow', krasnodar:'Europe/Moscow', kirov:'Europe/Moscow', novosibirsk:'Asia/Novosibirsk'};
+var CITY_TZ_MAP = {perm:'Asia/Yekaterinburg', ekb:'Asia/Yekaterinburg', ufa:'Asia/Yekaterinburg', chelyabinsk:'Asia/Yekaterinburg', tyumen:'Asia/Yekaterinburg', izhevsk:'Europe/Samara', samara:'Europe/Samara', saratov:'Europe/Saratov', moscow:'Europe/Moscow', spb:'Europe/Moscow', kazan:'Europe/Moscow', nizhniy:'Europe/Moscow', rostov:'Europe/Moscow', krasnodar:'Europe/Moscow', sochi:'Europe/Moscow', novorossiysk:'Europe/Moscow', voronezh:'Europe/Moscow', volgograd:'Europe/Moscow', kirov:'Europe/Moscow', murmansk:'Europe/Moscow', arkhangelsk:'Europe/Moscow', syktyvkar:'Europe/Moscow', kaliningrad:'Europe/Kaliningrad', novosibirsk:'Asia/Novosibirsk', omsk:'Asia/Omsk', krasnoyarsk:'Asia/Krasnoyarsk', irkutsk:'Asia/Irkutsk', yakutsk:'Asia/Yakutsk', khabarovsk:'Asia/Vladivostok', vladivostok:'Asia/Vladivostok'};
 function currentCitySlugSafe(){
   try{ if(typeof state!=='undefined' && state && state.city) return state.city; }catch(e){}
   return null;
@@ -229,6 +229,21 @@ const CITY_FALLBACK = [
   {slug:'tyumen', name:'Тюмень', full_name:'Тюмень', genitive:'Тюмени', timezone:'Asia/Yekaterinburg', utc_offset:5, lat:57.1522, lon:65.5412, is_default:false},
   {slug:'izhevsk', name:'Ижевск', full_name:'Ижевск', genitive:'Ижевска', timezone:'Europe/Samara', utc_offset:4, lat:56.8527, lon:53.2115, is_default:false},
   {slug:'kirov', name:'Киров', full_name:'Киров', genitive:'Кирова', timezone:'Europe/Moscow', utc_offset:3, lat:58.6035, lon:49.6668, is_default:false},
+  {slug:'voronezh', name:'Воронеж', full_name:'Воронеж', genitive:'Воронежа', timezone:'Europe/Moscow', utc_offset:3, lat:51.6720, lon:39.1843, is_default:false},
+  {slug:'volgograd', name:'Волгоград', full_name:'Волгоград', genitive:'Волгограда', timezone:'Europe/Moscow', utc_offset:3, lat:48.7080, lon:44.5133, is_default:false},
+  {slug:'omsk', name:'Омск', full_name:'Омск', genitive:'Омска', timezone:'Asia/Omsk', utc_offset:6, lat:55.0084, lon:73.3242, is_default:false},
+  {slug:'krasnoyarsk', name:'Красноярск', full_name:'Красноярск', genitive:'Красноярска', timezone:'Asia/Krasnoyarsk', utc_offset:7, lat:56.0153, lon:92.8932, is_default:false},
+  {slug:'saratov', name:'Саратов', full_name:'Саратов', genitive:'Саратова', timezone:'Europe/Saratov', utc_offset:4, lat:51.5924, lon:46.0348, is_default:false},
+  {slug:'sochi', name:'Сочи', full_name:'Сочи', genitive:'Сочи', timezone:'Europe/Moscow', utc_offset:3, lat:43.5855, lon:39.7231, is_default:false},
+  {slug:'irkutsk', name:'Иркутск', full_name:'Иркутск', genitive:'Иркутска', timezone:'Asia/Irkutsk', utc_offset:8, lat:52.2864, lon:104.2807, is_default:false},
+  {slug:'khabarovsk', name:'Хабаровск', full_name:'Хабаровск', genitive:'Хабаровска', timezone:'Asia/Vladivostok', utc_offset:10, lat:48.4802, lon:135.0719, is_default:false},
+  {slug:'vladivostok', name:'Владивосток', full_name:'Владивосток', genitive:'Владивостока', timezone:'Asia/Vladivostok', utc_offset:10, lat:43.1155, lon:131.8855, is_default:false},
+  {slug:'kaliningrad', name:'Калининград', full_name:'Калининград', genitive:'Калининграда', timezone:'Europe/Kaliningrad', utc_offset:2, lat:54.7104, lon:20.4522, is_default:false},
+  {slug:'novorossiysk', name:'Новороссийск', full_name:'Новороссийск', genitive:'Новороссийска', timezone:'Europe/Moscow', utc_offset:3, lat:44.7239, lon:37.7689, is_default:false},
+  {slug:'arkhangelsk', name:'Архангельск', full_name:'Архангельск', genitive:'Архангельска', timezone:'Europe/Moscow', utc_offset:3, lat:64.5399, lon:40.5157, is_default:false},
+  {slug:'yakutsk', name:'Якутск', full_name:'Якутск', genitive:'Якутска', timezone:'Asia/Yakutsk', utc_offset:9, lat:62.0355, lon:129.6755, is_default:false},
+  {slug:'murmansk', name:'Мурманск', full_name:'Мурманск', genitive:'Мурманска', timezone:'Europe/Moscow', utc_offset:3, lat:68.9585, lon:33.0827, is_default:false},
+  {slug:'syktyvkar', name:'Сыктывкар', full_name:'Сыктывкар', genitive:'Сыктывкара', timezone:'Europe/Moscow', utc_offset:3, lat:61.6687, lon:50.8358, is_default:false},
 ];
 // Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
 window.citySlugOf = function(){ return state.city || 'perm'; };
@@ -726,7 +741,8 @@ function normalizeApiConcert(c){
     ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
-    tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight)
+    tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
+    yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||''
   };
 }
 function normalizeApiConcertLight(c){
@@ -1452,6 +1468,56 @@ function ticketBtnHTML(tickets, price, vendor){
   if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Купить на Ticketland${price>0? ` от ${price}₽`:''}</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
+function yandexPromosHTML(c){
+  // Блок промокодов Яндекс Афиши (зеркало homepage/blocks/yandex_promocodes.html).
+  const promos = c.yandex_promocodes || [];
+  if(!promos.length) return '';
+  const items = promos.map(p=>{
+    const cond = `при заказе от ${p.min_price} ₽${p.new_only ? ' · только для новых пользователей' : ' · для всех пользователей'}`;
+    return `<div class="vk-promo-item">`
+      + `<div class="vk-promo-info"><span class="vk-promo-discount">${esc(p.discount_text||'')}</span> `
+      + `<span class="vk-promo-cond">${esc(cond)}</span></div>`
+      + `<div class="vk-promo-actions">`
+      + `<button type="button" class="vk-promo-code" data-code="${esc(p.code||'')}" onclick="copyVkPromo(this)">`
+      + `<span class="vk-promo-code-text">${esc(p.code||'')}</span> <i class="fa-solid fa-copy"></i></button> `
+      + `<a class="vk-promo-link" href="${esc(p.referral_link||'')}" target="_blank" rel="noopener">Перейти к покупке</a>`
+      + `</div></div>`;
+  }).join('');
+  return `<div class="vk-promo-box"><h3>Скидки на билеты</h3>`
+    + `<p class="vk-promo-sub">Введите промокод при заказе в мобильном приложении Яндекс Афиши</p>`
+    + `<p class="vk-promo-basket">Порог считается от суммы всего заказа: например, 2 билета по 1000 ₽ = 2000 ₽ — промокод на −300 ₽ уже сработает</p>`
+    + items
+    + (c.yandex_promo_ad_marking ? `<p class="vk-promo-ad">${esc(c.yandex_promo_ad_marking)}</p>` : '')
+    + `</div>`;
+}
+function copyVkPromo(btn){
+  // Копирование промокода: надпись «Скопировано!» держится, пока не нажмут другую кнопку.
+  const code = btn.getAttribute('data-code') || '';
+  document.querySelectorAll('.vk-promo-code').forEach(other=>{
+    if(other!==btn){
+      other.classList.remove('copied');
+      const t = other.querySelector('.vk-promo-code-text');
+      if(t) t.textContent = other.getAttribute('data-code') || '';
+    }
+  });
+  const label = btn.querySelector('.vk-promo-code-text');
+  const done = ()=>{ btn.classList.add('copied'); if(label) label.textContent = 'Скопировано!'; };
+  const fallback = ()=>{
+    const ta = document.createElement('textarea');
+    ta.value = code; ta.setAttribute('readonly','');
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta); done();
+  };
+  try{
+    if(typeof bridge !== 'undefined' && bridge && bridge.send){
+      bridge.send('VKWebAppCopyText', {text: code}).then(done).catch(fallback);
+    } else if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(done, fallback);
+    } else fallback();
+  }catch(e){ fallback(); }
+}
 function renderDetail(c, isFull){
   if(!c){
     els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Загрузка…</div>`;
@@ -1501,6 +1567,7 @@ function renderDetail(c, isFull){
       <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
     </div>
     ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
+    ${yandexPromosHTML(c)}
     ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
       : `<div class="detail__site-link"><a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
     ${similar.length? `<div class="detail__similar"><h3>Похожие концерты</h3><div class="horizontal-slider-row">${similar.map(s=>cardHTML(s,{mode:'similar'})).join('')}</div></div>`:''}
