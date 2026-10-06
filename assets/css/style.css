@@ -423,10 +423,9 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail__actions .pl-btn{flex:1;min-width:140px;justify-content:center}
 .detail__desc{font-family:'IBM Plex Serif',serif;font-size:15px;line-height:1.65;color:#333;margin-top:16px;word-break:break-word}
 .detail__desc a{color:var(--red);text-decoration:none}
-.vk-promo-box{background:#f7f7f5;border:1px dashed #fc0;border-radius:14px;padding:12px 14px;margin-top:16px;text-align:left}
+.vk-promo-box{background:#fc0;border-radius:14px;padding:12px 14px;margin-top:16px;text-align:left}
 .vk-promo-box h3{font-size:16px;margin:0 0 4px}
-.vk-promo-sub{margin:0 0 4px;color:#666;font-size:13px}
-.vk-promo-basket{margin:0 0 10px;color:#666;font-size:13px;font-style:italic}
+.vk-promo-sub{margin:0 0 10px;color:#222;font-size:13px}
 .vk-promo-item{background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .vk-promo-discount{font-weight:700;color:#222}
 .vk-promo-cond{color:#666;font-size:13px}
@@ -434,6 +433,11 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .vk-promo-code{display:inline-flex;align-items:center;gap:8px;font-family:monospace;font-size:15px;font-weight:700;letter-spacing:.05em;color:#222;background:#f5f5f5;border:1px dashed #999;border-radius:8px;padding:6px 12px;cursor:pointer}
 .vk-promo-link{color:var(--red);font-size:14px}
 .vk-promo-ad{margin:10px 0 0;color:#999;font-size:11px}
+.vk-pushkin-box{background:#f5f5f5;border-left:4px solid #b00020;border-radius:14px;padding:12px 14px;margin-top:16px;text-align:left}
+.vk-pushkin-box h3{font-size:16px;margin:0 0 4px}
+.vk-pushkin-sub{margin:0 0 10px;color:#222;font-size:13px}
+.vk-pushkin-link{color:var(--red);font-size:14px}
+.vk-pushkin-ad{margin:10px 0 0;color:#999;font-size:11px}
 .detail__similar{margin-top:20px}
 .detail__similar>h3{font-size:16px;margin:0 0 8px}
 .detail__similar .card-title{font-size:13px}

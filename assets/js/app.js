@@ -32,6 +32,10 @@ const els = {
   sliderForyou: $('#slider-foryou'),
   foryouBadge: $('#foryou-badge'),
   foryouTitleLink: $('#foryou-title-link'),
+  promoRow: $('#promo-row'),
+  sliderPromo: $('#slider-promo'),
+  promoBadge: $('#promo-badge'),
+  promoTitleLink: $('#promo-title-link'),
   calOverlay: $('#cal-overlay'),
   calModal: $('#cal-modal'),
   top10Row: $('#top10-row'),
@@ -164,6 +168,8 @@ const state = {
   upcomingPool: [],
   top10Pool: [],
   forYouPool: [],
+  promoPool: [],
+  promoTotal: 0,
   vkUserId: null,
   vkName: '',
   vkParams: null,
@@ -529,6 +535,8 @@ async function switchCity(slug, opts){
   state.top10Pool=[];
   state.upcomingPool=[];
   state.forYouPool=[];
+  state.promoPool=[];
+  state.promoTotal=0;
   state.hasForYou=false;
   state.fullLoaded=false;
   state.upcomingTotalCache=0;
@@ -556,6 +564,14 @@ function rebuildPools(){
     return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'');
   }).slice(0, 30);
   state.upcomingPool = future.slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  // Промокоды: яндекс-билеты от 1000 ₽, по рейтингу — как подборка на сайте
+  state.promoPool = future.filter(c=>{
+    try{
+      const v = c.ticket_vendor || ticketVendor(c.tickets);
+      return v === 'yandex' && Number(c.price) >= 1000;
+    }catch(e){ return false; }
+  }).sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date));
+  state.promoTotal = state.promoPool.length;
   if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.map(c => c.date));
 }
 
@@ -742,7 +758,8 @@ function normalizeApiConcert(c){
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
     tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
-    yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||''
+    yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||'',
+    is_pushkin_card: !!c.is_pushkin_card, pushkin_promo_link: c.pushkin_promo_link||'', pushkin_ad_marking: c.pushkin_ad_marking||''
   };
 }
 function normalizeApiConcertLight(c){
@@ -1089,6 +1106,7 @@ function renderSliders(){
     els.sliderTop10.style.display='none';
     els.sliderUpcoming.style.display='none';
     if(els.sliderForyou) els.sliderForyou.style.display='none';
+    if(els.sliderPromo) els.sliderPromo.style.display='none';
     els.dateTitleText.textContent=title;
     renderSlider(els.sliderDate, els.dateRow, list, total, 'date', title);
     els.dateTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
@@ -1123,12 +1141,26 @@ function renderSliders(){
         }
       }
     }
+    // промокоды — ниже рекомендаций (или ближайших, если рекомендаций нет)
+    if(els.sliderPromo){
+      const shouldShowPromo = state.promoPool.length>0;
+      els.sliderPromo.style.display = shouldShowPromo ? '' : 'none';
+      if(shouldShowPromo){
+        renderSlider(els.sliderPromo, els.promoRow, state.promoPool, state.promoTotal, 'promo', 'Промокоды на билеты');
+        if(els.promoTitleLink) els.promoTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('promo')};
+        if(els.promoBadge){
+          if(state.promoTotal>10){ els.promoBadge.textContent=`Смотреть все ${state.promoTotal}`; els.promoBadge.style.display='inline-flex'; els.promoBadge.onclick=(e)=>{e.preventDefault(); openTimeline('promo')}; }
+          else els.promoBadge.style.display='none';
+        }
+      }
+    }
   } else {
     // timeline mode: hide all sliders
     els.sliderDate.style.display='none';
     els.sliderTop10.style.display='none';
     els.sliderUpcoming.style.display='none';
     if(els.sliderForyou) els.sliderForyou.style.display='none';
+    if(els.sliderPromo) els.sliderPromo.style.display='none';
     els.timelineWrap.style.display='';
   }
 }
@@ -1256,6 +1288,7 @@ function renderTimeline(){
 function getTimelineTitle(){
   if(state.timelineMode==='top10') return 'Топ-10';
   if(state.timelineMode==='foryou') return 'Рекомендации для вас';
+  if(state.timelineMode==='promo') return 'Промокоды на билеты';
   if(state.timelineMode==='upcoming') return 'Ближайшие события';
   if(state.timelineMode==='date') return fmtHeaderDate(parseISO(state.selectedDate));
   if(state.timelineMode==='range') return `${fmtDateShort(state.range.start)} — ${fmtDateShort(state.range.end)}`;
@@ -1273,6 +1306,8 @@ function applyFilter(){
     list = [...state.top10Pool].slice(0,80);
   } else if(state.timelineMode==='foryou'){
     list = [...state.forYouPool].slice(0,80);
+  } else if(state.timelineMode==='promo'){
+    list = [...state.promoPool].slice(0,80);
   } else if(state.timelineMode==='upcoming'){
     list = [...state.upcomingPool].slice(0,400);
   } else if(state.timelineMode==='date'){
@@ -1484,14 +1519,14 @@ function yandexPromosHTML(c){
       + `</div></div>`;
   }).join('');
   return `<div class="vk-promo-box"><h3>Скидки на билеты</h3>`
-    + `<p class="vk-promo-sub">Введите промокод при заказе в мобильном приложении Яндекс Афиши</p>`
-    + `<p class="vk-promo-basket">Порог считается от суммы всего заказа: например, 2 билета по 1000 ₽ = 2000 ₽ — промокод на −300 ₽ уже сработает</p>`
+    + `<p class="vk-promo-sub">Вводить промокод нужно в мобильном приложении Яндекс.Афиша.<br>Минимальная сумма заказа со скидкой: 2000 ₽</p>`
     + items
     + (c.yandex_promo_ad_marking ? `<p class="vk-promo-ad">${esc(c.yandex_promo_ad_marking)}</p>` : '')
     + `</div>`;
 }
-function copyVkPromo(btn){
+window.copyVkPromo = function(btn){
   // Копирование промокода: надпись «Скопировано!» держится, пока не нажмут другую кнопку.
+  // window.* — обязательно: app.js грузится как type="module", иначе inline-onclick не видит функцию.
   const code = btn.getAttribute('data-code') || '';
   document.querySelectorAll('.vk-promo-code').forEach(other=>{
     if(other!==btn){
@@ -1502,21 +1537,36 @@ function copyVkPromo(btn){
   });
   const label = btn.querySelector('.vk-promo-code-text');
   const done = ()=>{ btn.classList.add('copied'); if(label) label.textContent = 'Скопировано!'; };
-  const fallback = ()=>{
+  const execFallback = ()=>{
     const ta = document.createElement('textarea');
     ta.value = code; ta.setAttribute('readonly','');
     ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
     try{ document.execCommand('copy'); }catch(e){}
     document.body.removeChild(ta); done();
   };
+  const bridgeCopy = ()=>{
+    try{
+      if(typeof bridge !== 'undefined' && bridge && bridge.send){
+        bridge.send('VKWebAppCopyText', {text: code}).then(done).catch(execFallback);
+      } else execFallback();
+    }catch(e){ execFallback(); }
+  };
   try{
-    if(typeof bridge !== 'undefined' && bridge && bridge.send){
-      bridge.send('VKWebAppCopyText', {text: code}).then(done).catch(fallback);
-    } else if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(code).then(done, fallback);
-    } else fallback();
-  }catch(e){ fallback(); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(done).catch(bridgeCopy);
+    } else bridgeCopy();
+  }catch(e){ bridgeCopy(); }
+};
+function pushkinHTML(c){
+  // Блок «Оплата Пушкинской картой» (зеркало homepage/blocks/pushkin_card.html).
+  if(!c.is_pushkin_card) return '';
+  return `<div class="vk-pushkin-box"><h3>Оплата Пушкинской картой</h3>`
+    + `<p class="vk-pushkin-sub">Этот концерт можно оплатить Пушкинской картой при покупке билетов в Ticketland</p>`
+    + (c.pushkin_promo_link ? `<a class="vk-pushkin-link" href="${esc(c.pushkin_promo_link)}" target="_blank" rel="noopener">Мероприятия по Пушкинской карте</a>` : '')
+    + (c.pushkin_ad_marking ? `<p class="vk-pushkin-ad">${esc(c.pushkin_ad_marking)}</p>` : '')
+    + `</div>`;
 }
 function renderDetail(c, isFull){
   if(!c){
@@ -1568,6 +1618,7 @@ function renderDetail(c, isFull){
     </div>
     ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
     ${yandexPromosHTML(c)}
+    ${pushkinHTML(c)}
     ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
       : `<div class="detail__site-link"><a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}
     ${similar.length? `<div class="detail__similar"><h3>Похожие концерты</h3><div class="horizontal-slider-row">${similar.map(s=>cardHTML(s,{mode:'similar'})).join('')}</div></div>`:''}

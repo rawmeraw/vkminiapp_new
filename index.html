@@ -23,7 +23,7 @@
   <!-- Yandex Maps JS API v3 — ключ только для vkminiapp_new -->
   <script>window.PermLiveMapSettings={apiKey:'30ae02d3-cd24-4741-849d-947b8c46c1a9'};window.PermLiveMapData={events:[],today:'',defaultDate:'',emotionDate:'',csrf:'',emotionMe:{is_auth:false}};</script>
 
-  <link rel="stylesheet" href="./assets/css/style.css?v=20261006">
+  <link rel="stylesheet" href="./assets/css/style.css?v=20261006d">
   <link rel="stylesheet" href="./assets/css/maps.css?v=20260911">
 </head>
 <body>
@@ -119,6 +119,17 @@
           <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
         </div>
 
+        <!-- Промокоды (Яндекс Афиша) — ниже рекомендаций -->
+        <div class="horizontal-slider promo" id="slider-promo" style="display:none">
+          <h2 class="section-title">
+            <a class="section-header-wrapper" id="promo-title-link" href="#"><i class="fa-solid fa-percent"></i> Промокоды на билеты</a>
+            <a class="section-count-badge" id="promo-badge" style="display:none"></a>
+          </h2>
+          <div class="horizontal-slider-row" id="promo-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
+
         <!-- Дата / диапазон — показывается только при выборе даты -->
         <div class="horizontal-slider withdate" id="slider-date" style="display:none">
           <h2 class="section-title">
@@ -205,6 +216,6 @@
 
   <script src="./assets/js/maps/map-core.js?v=20260910" defer></script>
   <script src="./assets/js/maps/events-map.js?v=20261001" defer></script>
-  <script type="module" src="./assets/js/app.js?v=20261006"></script>
+  <script type="module" src="./assets/js/app.js?v=20261006d"></script>
 </body>
 </html>
