@@ -387,18 +387,20 @@ function renderCityDropdown(){
   const menu = els.cityMenu;
   if(!menu) return;
   const list = state.cities.length ? state.cities : CITY_FALLBACK;
-  const groups = groupCities(list);
-  const item = function(c){
-    const active = c.slug===state.city;
+  // Активный город — всегда первым, остальные — группами по регионам.
+  const active = list.find(c => c.slug===state.city) || null;
+  const rest = active ? list.filter(c => c.slug!==state.city) : list;
+  const groups = groupCities(rest);
+  const item = function(c, isActive){
     const count = (typeof c.event_count==='number' && c.event_count>0)
       ? `<span class="city-count-badge">${c.event_count}</span>` : '';
-    return `<a class="city-dropdown-item${active?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
+    return `<a class="city-dropdown-item${isActive?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
       `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>${count}`+
-      (active ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
+      (isActive ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
   };
-  menu.innerHTML = groups.map(g =>
+  menu.innerHTML = (active ? item(active, true) : '') + groups.map(g =>
     `<div class="city-dropdown-group-title">${esc(g.title)}</div>` +
-    g.cities.map(item).join('')
+    g.cities.map(c => item(c, false)).join('')
   ).join('') + `<a class="cities-dropdown-all" role="menuitem" data-city-all="1">`+
     `<i class="fa-solid fa-map-location-dot"></i><span>Все города</span></a>`;
   menu.querySelectorAll('[data-city-slug]').forEach(function(a){
@@ -2290,6 +2292,9 @@ function switchTab(tab, keepHistory){
     tab='feed';
   }
   state.tab=tab;
+  // таймлайн живёт только на вкладке ленты: при уходе с feed сбрасываем,
+  // иначе таббар/шапка продолжали подсвечивать «Таймлайн» (напр. на «Предложить»)
+  if(tab!=='feed') state.timelineMode=null;
   if(tab!=='detail') state.detailSlug=null;
   document.body.classList.remove('map-fullscreen','pl-map-fs');
   // на вкладке карты скролл страницы блокируем: хедер всегда на месте, карта ровно от хедера до футера
