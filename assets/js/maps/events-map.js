@@ -587,8 +587,11 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var price = ev.price > 0 ? '<span class="pl-map-balloon__cluster-price">' +
             ev.price + ' ₽</span>' : '';
 
-        var meta = (time ? ' · ' + time : '') + (price ? ' · ' + price : '');
-        return '<p class="pl-map-balloon__cluster-item"><a href="' + escapeAttr(ev.url) + '">' +
+        var metaInner = (time ? time : '') +
+            ((time && price) ? '<span class="pl-map-balloon__cluster-dot" aria-hidden="true"> · </span>' : '') +
+            (price ? price : '');
+        var meta = metaInner ? '<span class="pl-map-balloon__cluster-meta">' + metaInner + '</span>' : '';
+        return '<p class="pl-map-balloon__cluster-item"><a class="pl-map-balloon__cluster-link" href="' + escapeAttr(ev.url) + '">' +
             escapeHtml(ev.title) + '</a>' + meta + '</p>';
     }
 
