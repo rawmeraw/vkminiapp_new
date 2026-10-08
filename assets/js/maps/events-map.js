@@ -581,6 +581,188 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
     }
 
+    function clusterItemHtml(ev) {
+        var time = ev.time ? '<span class="pl-map-balloon__cluster-time">' +
+            escapeHtml(ev.time.slice(0, 5)) + '</span>' : '';
+        var price = ev.price > 0 ? '<span class="pl-map-balloon__cluster-price">' +
+            ev.price + ' ₽</span>' : '';
+
+        var meta = (time ? ' · ' + time : '') + (price ? ' · ' + price : '');
+        return '<p class="pl-map-balloon__cluster-item"><a href="' + escapeAttr(ev.url) + '">' +
+            escapeHtml(ev.title) + '</a>' + meta + '</p>';
+    }
+
+    function groupClusterByPlace(eventsFeats) {
+        var groups = [];
+        var index = {};
+        for (var i = 0; i < eventsFeats.length; i++) {
+            var ev = eventsFeats[i].properties || {};
+            var place = ev.place ? String(ev.place).trim() : '';
+            var address = ev.address ? String(ev.address).trim() : '';
+            var key = venueKeyOf(ev);
+            if (!index.hasOwnProperty(key)) {
+                index[key] = {
+                    key: key,
+                    place: place || 'Площадка не указана',
+                    address: address,
+                    avatar: '',
+                    url: '',
+                    feats: []
+                };
+                groups.push(index[key]);
+            }
+            if (!index[key].avatar && ev.place_avatar) index[key].avatar = String(ev.place_avatar);
+            if (!index[key].url && ev.place_url) index[key].url = String(ev.place_url);
+            index[key].feats.push(eventsFeats[i]);
+        }
+        var timeOf = function (f) { return (f.properties && f.properties.time) || '99:99'; };
+        for (var g = 0; g < groups.length; g++) {
+            groups[g].feats.sort(function (a, b) {
+                var at = timeOf(a), bt = timeOf(b);
+                return at < bt ? -1 : (at > bt ? 1 : 0);
+            });
+        }
+        groups.sort(function (a, b) {
+            var at = a.feats.length ? timeOf(a.feats[0]) : '99:99';
+            var bt = b.feats.length ? timeOf(b.feats[0]) : '99:99';
+            if (at !== bt) return at < bt ? -1 : 1;
+            if (a.feats.length !== b.feats.length) return b.feats.length - a.feats.length;
+            return a.place < b.place ? -1 : (a.place > b.place ? 1 : 0);
+        });
+        return groups;
+    }
+
+    function venueKeyOf(ev) {
+        var place = ev && ev.place ? String(ev.place).trim() : '';
+        var address = ev && ev.address ? String(ev.address).trim() : '';
+        return place ? (place + '||' + address) : '__novenue__';
+    }
+
+    function venueHeadHtml(gr) {
+        var letter = gr.place ? String(gr.place).charAt(0).toUpperCase() : '?';
+        var inner = '<span class="pl-map-balloon__venue-letter" aria-hidden="true">' +
+            escapeHtml(letter) + '</span>';
+        if (gr.avatar) {
+            inner += '<img class="pl-map-balloon__venue-img" src="' + escapeAttr(gr.avatar) +
+                '" alt="" loading="lazy" decoding="async" onerror="this.remove()">';
+        }
+        var avatar = gr.url
+            ? '<a class="pl-map-balloon__venue-avatar" href="' + escapeAttr(gr.url) + '"' +
+              ' aria-label="' + escapeAttr(gr.place) + '">' + inner + '</a>'
+            : '<span class="pl-map-balloon__venue-avatar" aria-hidden="true">' + inner + '</span>';
+        var name = gr.url
+            ? '<a class="pl-map-balloon__venue-name" href="' + escapeAttr(gr.url) + '">' +
+              escapeHtml(gr.place) + '</a>'
+            : '<span class="pl-map-balloon__venue-name">' + escapeHtml(gr.place) + '</span>';
+        var addr = gr.address
+            ? '<p class="pl-map-balloon__cluster-addr">' + escapeHtml(gr.address) + '</p>'
+            : '';
+        return '<div class="pl-map-balloon__venue">' + avatar +
+            '<div class="pl-map-balloon__venue-main">' + name + addr + '</div></div>';
+    }
+
+    function clusterEmotionsHtml(emotionFeats) {
+        if (!emotionFeats || !emotionFeats.length) return '';
+        return '<div class="pl-map-balloon__cluster-emotions">' + emotionFeats.map(function (f) {
+            var em = f.properties.em;
+            return '<button type="button" class="pl-map-balloon__cluster-emotion" data-emoid="' +
+                escapeAttr(em.id) + '">' + escapeHtml(em.emoji) + ' <span>' +
+                escapeHtml(em.user || 'Пользователь') + '</span></button>';
+        }).join('') + '</div>';
+    }
+
+    function clusterBodyHtml(groups, activeIdx) {
+        if (!groups.length) return { html: '', isTabbed: false };
+        if (groups.length === 1) {
+            var only = groups[0];
+            return {
+                html: venueHeadHtml(only) + only.feats.map(function (f) {
+                    return clusterItemHtml(f.properties);
+                }).join(''),
+                isTabbed: false
+            };
+        }
+        var tabsHtml = '<div class="pl-map-balloon__tabs" role="tablist">' + groups.map(function (gr, idx) {
+            return '<button type="button" role="tab" class="pl-map-balloon__tab' +
+                (idx === activeIdx ? ' pl-map-balloon__tab--active' : '') + '" data-tab="' + idx + '"' +
+                ' aria-selected="' + (idx === activeIdx ? 'true' : 'false') + '"' +
+                ' title="' + escapeAttr(gr.place) + '">' +
+                '<span class="pl-map-balloon__tab-name">' + escapeHtml(gr.place) + '</span>' +
+                '<span class="pl-map-balloon__tab-count">' + gr.feats.length + '</span></button>';
+        }).join('') + '</div>';
+        var panelsHtml = '<div class="pl-map-balloon__tabpanels">' + groups.map(function (gr, idx) {
+            var list = gr.feats.map(function (f) {
+                return clusterItemHtml(f.properties);
+            }).join('');
+            return '<div class="pl-map-balloon__tabpanel' +
+                (idx === activeIdx ? ' pl-map-balloon__tabpanel--active' : '') + '" role="tabpanel" data-panel="' + idx + '">' +
+                venueHeadHtml(gr) + list + '</div>';
+        }).join('') + '</div>';
+        return { html: tabsHtml + panelsHtml, isTabbed: true };
+    }
+
+    function bindClusterTabs() {
+        var tabs = state.balloonEl.querySelectorAll('.pl-map-balloon__tab');
+        var panels = state.balloonEl.querySelectorAll('.pl-map-balloon__tabpanel');
+        if (!tabs.length) return;
+        var selectTab = function (idx) {
+            for (var ti = 0; ti < tabs.length; ti++) {
+                var on = ti === idx;
+                tabs[ti].classList.toggle('pl-map-balloon__tab--active', on);
+                tabs[ti].setAttribute('aria-selected', on ? 'true' : 'false');
+            }
+            for (var pi = 0; pi < panels.length; pi++) {
+                panels[pi].classList.toggle('pl-map-balloon__tabpanel--active', pi === idx);
+            }
+            try { state.balloonEl.scrollTop = 0; } catch (e) {}
+            try {
+                if (tabs[idx] && tabs[idx].scrollIntoView) {
+                    tabs[idx].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }
+            } catch (e) {}
+        };
+        for (var ti = 0; ti < tabs.length; ti++) {
+            (function (idx) {
+                tabs[idx].addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    selectTab(idx);
+                });
+            })(ti);
+        }
+    }
+
+    function bindClusterEmotions(anchorEl) {
+        var emoItems = state.balloonEl.querySelectorAll('.pl-map-balloon__cluster-emotion');
+        for (var e = 0; e < emoItems.length; e++) {
+            emoItems[e].addEventListener('click', function () {
+                var id = this.getAttribute('data-emoid');
+                var em = null;
+                for (var j = 0; j < state.emotions.length; j++) {
+                    if (String(state.emotions[j].id) === String(id)) {
+                        em = state.emotions[j];
+                        break;
+                    }
+                }
+                if (!em) return;
+                closeBalloon();
+                openEmotionPop(em, anchorEl);
+            });
+        }
+    }
+
+    function fillClusterBalloon(bodyHtml, emotionsHtml, isTabbed, anchorEl) {
+        state.balloonEl.innerHTML =
+            '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
+            bodyHtml + emotionsHtml;
+        state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
+        state.balloonEl.classList.toggle('pl-map-balloon--tabs', isTabbed);
+        try { state.balloonEl.scrollTop = 0; } catch (e) {}
+        setBalloonActive(null);
+        updateBalloonPosition();
+        if (isTabbed) bindClusterTabs();
+        bindClusterEmotions(anchorEl);
+    }
+
     function openClusterList(features, clusterEl) {
         if (emotionOpenId) hideEmotionPop();
         state.balloonOpenId = 'cluster';
@@ -593,77 +775,59 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             return f.properties && f.properties.featureType === 'emotion';
         });
 
-        var items = eventsFeats.slice().sort(function (a, b) {
-            var at = a.properties.time || '99:99';
-            var bt = b.properties.time || '99:99';
-            return at < bt ? -1 : (at > bt ? 1 : 0);
-        }).map(function (f) {
-            var ev = f.properties;
-            var time = ev.time ? '<span class="pl-map-balloon__cluster-time">' +
-                escapeHtml(ev.time.slice(0, 5)) + '</span>' : '';
-            var price = ev.price > 0 ? '<span class="pl-map-balloon__cluster-price">' +
-                ev.price + ' ₽</span>' : '';
+        var groups = groupClusterByPlace(eventsFeats);
+        var body = clusterBodyHtml(groups, 0);
+        fillClusterBalloon(body.html, clusterEmotionsHtml(emotionFeats), body.isTabbed, clusterEl);
+    }
 
-            var meta = (time ? ' · ' + time : '') + (price ? ' · ' + price : '');
-            return '<p class="pl-map-balloon__cluster-item"><a href="' + escapeAttr(ev.url) + '">' +
-                escapeHtml(ev.title) + '</a>' + meta + '</p>';
-        }).join('');
+    // Тап по пину: если рядом (в радиусе) есть события РАЗНЫХ заведений —
+    // показываем их вкладками сразу, активной — заведение нажатого пина.
+    // Одно заведение / одно событие — как раньше, богатая карточка события.
+    var PIN_NEARBY_M = 150;
 
-        if (emotionFeats.length) {
-            items += '<div class="pl-map-balloon__cluster-emotions">' + emotionFeats.map(function (f) {
-                var em = f.properties.em;
-                return '<button type="button" class="pl-map-balloon__cluster-emotion" data-emoid="' +
-                    escapeAttr(em.id) + '">' + escapeHtml(em.emoji) + ' <span>' +
-                    escapeHtml(em.user || 'Пользователь') + '</span></button>';
-            }).join('') + '</div>';
+    function openNearbyList(centerEvent, pinEl) {
+        if (!centerEvent || !centerEvent.coordinates) return false;
+        var feats = [];
+        var vis = filteredEvents();
+        for (var i = 0; i < vis.length; i++) {
+            var ev = vis[i];
+            if (ev.coordinates && coordsDistanceM(centerEvent.coordinates, ev.coordinates) <= PIN_NEARBY_M) {
+                feats.push({ geometry: { coordinates: ev.coordinates }, properties: ev });
+            }
+        }
+        var groups = groupClusterByPlace(feats);
+        if (groups.length < 2) return false;
+
+        var ckey = venueKeyOf(centerEvent);
+        var activeIdx = 0;
+        for (var g = 0; g < groups.length; g++) {
+            if (groups[g].key === ckey) { activeIdx = g; break; }
         }
 
-        var placeTitle = '';
-        if (eventsFeats.length) {
-            var firstPlace = eventsFeats[0].properties && eventsFeats[0].properties.place;
-            var samePlace = !!firstPlace && eventsFeats.every(function (f) {
-                return (f.properties && f.properties.place) === firstPlace;
-            });
-            if (samePlace) {
-                placeTitle = '<div class="pl-map-balloon__cluster-title">' +
-                    escapeHtml(firstPlace) + '</div>';
+        var emotionFeats = [];
+        if (state.emotionsVisible && isTodayView()) {
+            for (var k = 0; k < state.emotions.length; k++) {
+                var em = state.emotions[k];
+                if (em && em.coords && coordsDistanceM(centerEvent.coordinates, em.coords) <= PIN_NEARBY_M) {
+                    emotionFeats.push({ properties: { featureType: 'emotion', em: em } });
+                }
             }
         }
 
-        state.balloonEl.innerHTML =
-            '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
-            placeTitle +
-            items;
-        state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
-        setBalloonActive(null);
-        updateBalloonPosition();
-
-        if (emotionFeats.length) {
-            var emoItems = state.balloonEl.querySelectorAll('.pl-map-balloon__cluster-emotion');
-            for (var e = 0; e < emoItems.length; e++) {
-                emoItems[e].addEventListener('click', function () {
-                    var id = this.getAttribute('data-emoid');
-                    var em = null;
-                    for (var j = 0; j < state.emotions.length; j++) {
-                        if (String(state.emotions[j].id) === String(id)) {
-                            em = state.emotions[j];
-                            break;
-                        }
-                    }
-                    if (!em) return;
-                    closeBalloon();
-
-                    openEmotionPop(em, clusterEl);
-                });
-            }
-        }
+        if (emotionOpenId) hideEmotionPop();
+        state.balloonOpenId = 'cluster';
+        state.activePinEl = pinEl;
+        var body = clusterBodyHtml(groups, activeIdx);
+        fillClusterBalloon(body.html, clusterEmotionsHtml(emotionFeats), body.isTabbed, pinEl);
+        return true;
     }
 
     function toggleBalloon(event, pinEl) {
-        if (state.balloonOpenId === event.id) {
+        if (state.balloonOpenId === event.id || state.activePinEl === pinEl) {
             closeBalloon();
             return;
         }
+        if (openNearbyList(event, pinEl)) return;
         openBalloon(event, pinEl);
     }
 
@@ -752,6 +916,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         }
 
         state.balloonEl.classList.add('pl-map-balloon--open');
+        state.balloonEl.classList.remove('pl-map-balloon--list');
+        state.balloonEl.classList.remove('pl-map-balloon--tabs');
         setBalloonActive(event.id);
         updateBalloonPosition();
         state.balloonOpenedAt = Date.now();
@@ -819,6 +985,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.balloonEl.classList.remove('pl-map-balloon--open');
         state.balloonEl.classList.remove('pl-map-balloon--anchored');
         state.balloonEl.classList.remove('pl-map-balloon--list');
+        state.balloonEl.classList.remove('pl-map-balloon--tabs');
         state.balloonEl.style.left = '';
         state.balloonEl.style.top = '';
         state.balloonEl.style.transform = '';
