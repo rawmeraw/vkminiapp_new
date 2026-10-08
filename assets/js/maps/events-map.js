@@ -40,15 +40,24 @@
         syktyvkar: [50.8358, 61.6687]
     };
 
+    // Цвета типов событий: music — Музыка (красный), stage — Кино и сцена
+    // (синий), talk — Юмор и игры (оранжевый), expo — Выставки и знания
+    // (шалфей), other — Прочее (серый). Paid — золото, эмоции — фиолетовый.
     var GENRE_COLORS = {
-        'live': '#e14425',
-        'pop': '#2f6fed',
-        'classic': '#2f9e44',
-        'rock': '#7c3aed',
-        'electronica': '#0891b2',
-        'hip-hop': '#db2777',
-        'jazz': '#b45309',
+        'music': '#e14425',
+        'stage': '#2f6fed',
+        'talk': '#eab308',
+        'expo': '#7d8c6f',
         'other': '#94a3b8'
+    };
+
+    // Подписи для легенды карты (порядок = порядок строк).
+    var GENRE_LABELS = {
+        'music': 'Музыка',
+        'stage': 'Кино и сцена',
+        'talk': 'Юмор и игры',
+        'expo': 'Выставки и знания',
+        'other': 'Прочее'
     };
 
     var EMOTION_COLOR = '#8b5cf6';
@@ -60,8 +69,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var pressedEl = null;
     var pressedXY = null;
 
-    var FILTER_KEY = 'pl_map_filters_v1';
-    var FILTER_TYPES = ['live', 'pop', 'classic'];
+    var FILTER_KEY = 'pl_map_filters_v2';
+    var FILTER_TYPES = ['music', 'stage', 'talk', 'expo'];
     var MODE_KEY = 'pl_map_mode_v1';
 
     var state = {
@@ -83,7 +92,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
         emotions: [],
         emotionsVisible: true,
-        filters: { live: true, pop: true, classic: true },
+        filters: { music: true, stage: true, talk: true, expo: true },
         modeFilter: 'all',
         filterBtns: {},
         emotionPanels: [],
@@ -134,9 +143,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         if (raw) {
             try {
                 var data = JSON.parse(raw);
-                if (typeof data.live === 'boolean') state.filters.live = data.live;
-                if (typeof data.pop === 'boolean') state.filters.pop = data.pop;
-                if (typeof data.classic === 'boolean') state.filters.classic = data.classic;
+                for (var fi = 0; fi < FILTER_TYPES.length; fi++) {
+                    var fk = FILTER_TYPES[fi];
+                    if (typeof data[fk] === 'boolean') state.filters[fk] = data[fk];
+                }
                 if (typeof data.emotions === 'boolean') state.emotionsVisible = data.emotions;
                 if (typeof data.mode === 'string' && (data.mode === 'all' || data.mode === 'free' || data.mode === 'foryou')) {
                     state.modeFilter = data.mode;
@@ -155,11 +165,11 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function saveFilterPrefs() {
         try {
             var data = {
-                live: !!state.filters.live,
-                pop: !!state.filters.pop,
-                classic: !!state.filters.classic,
                 emotions: !!state.emotionsVisible,
                 mode: state.modeFilter
+            };
+            for (var fi = 0; fi < FILTER_TYPES.length; fi++) {
+                data[FILTER_TYPES[fi]] = !!state.filters[FILTER_TYPES[fi]];
             };
             var json = JSON.stringify(data);
             try { localStorage.setItem(FILTER_KEY, json); } catch (e) {}
@@ -191,9 +201,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
     function passesTypeFilter(ev) {
         var t = primaryType(ev);
-        if (t === 'live') return !!state.filters.live;
-        if (t === 'pop') return !!state.filters.pop;
-        if (t === 'classic') return !!state.filters.classic;
+        if (t === 'other' || !t) return true;
+        if (GENRE_COLORS.hasOwnProperty(t)) return !!state.filters[t];
         return true;
     }
     function passesModeFilter(ev) {
@@ -206,7 +215,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function getTypeAvailability() {
-        var cnt = { live: 0, pop: 0, classic: 0 };
+        var cnt = { music: 0, stage: 0, talk: 0, expo: 0 };
         for (var i = 0; i < state.events.length; i++) {
             var t = primaryType(state.events[i]);
             if (cnt.hasOwnProperty(t)) cnt[t]++;
@@ -251,7 +260,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 if (k === 'emotions') {
                     btn.title = 'Эмоции на карте: ' + (on ? 'включены' : 'выключены');
                 } else {
-                    var label = k.charAt(0).toUpperCase() + k.slice(1);
+                    var label = GENRE_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1));
                     btn.title = label + ': ' + (on ? 'показаны' : 'скрыты');
                     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
                 }
@@ -1694,6 +1703,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var any = false;
         if (state.balloonOpenId) { closeBalloon(); any = true; }
         if (emotionOpenId && emotionPopEl && emotionPopEl.parentNode) { hideEmotionPop(); any = true; }
+        if (isLegendOpen()) { closeLegend(); any = true; }
         if (isFlowerOpen()) { hideFlower(); any = true; }
         if (state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open')) { hideProposeComposer(); any = true; }
         if (window.__PermLiveMapEmotionOpen) { hideEmotionComposer(); any = true; }
@@ -1726,7 +1736,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion, .pl-map-balloon, ' +
             '.pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
             '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
-            '.pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, ' +
+            '.pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-legend-modal, .pl-map-legend-overlay, ' +
             '.pl-map-controls, .pl-map-calendar-modal, .pl-map-calendar-overlay')) return true;
 
         if (t.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]')) return true;
@@ -1743,7 +1753,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var MAP_UI_SEL = '.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
         '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
         '.pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, ' +
-        '.pl-map-calendar-modal, .pl-map-calendar-overlay';
+        '.pl-map-calendar-modal, .pl-map-calendar-overlay, .pl-map-legend-modal, .pl-map-legend-overlay';
     function overlayTarget(t) {
         if (!t || !t.closest) return false;
         if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion')) return false;
@@ -2206,6 +2216,70 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         document.body.style.overflow = 'hidden';
     }
 
+    /* ---------- Легенда карты (только просмотр, фильтры не трогает) ---------- */
+    var legendModal = null;
+    var legendOverlay = null;
+
+    function isLegendOpen() {
+        return !!(legendModal && legendModal.classList.contains('pl-map-legend-modal--open'));
+    }
+
+    function legendRow(color, label, count, extraCls) {
+        var cnt = (typeof count === 'number' && count > 0)
+            ? '<span class="pl-map-legend__count">' + count + '</span>' : '';
+        return '<div class="pl-map-legend__row' + (extraCls ? ' ' + extraCls : '') + '">' +
+            '<span class="pl-map-legend__dot" style="background:' + escapeAttr(color) + '"></span>' +
+            '<span class="pl-map-legend__label">' + escapeHtml(label) + '</span>' + cnt + '</div>';
+    }
+
+    function openLegend() {
+        closeBalloon();
+        if (emotionOpenId) hideEmotionPop();
+        if (!legendModal) {
+            legendOverlay = el('div', 'pl-map-legend-overlay');
+            legendOverlay.addEventListener('click', function () { closeLegend(); });
+            legendModal = el('div', 'pl-map-legend-modal');
+            legendModal.setAttribute('role', 'dialog');
+            legendModal.setAttribute('aria-label', 'Легенда карты');
+            document.body.appendChild(legendOverlay);
+            document.body.appendChild(legendModal);
+        }
+        var avail = getTypeAvailability();
+        var emotionCount = (state.emotionsVisible && isTodayView()) ? state.emotions.length : 0;
+        var rows = '';
+        for (var k = 0; k < FILTER_TYPES.length; k++) {
+            var key = FILTER_TYPES[k];
+            rows += legendRow(GENRE_COLORS[key], GENRE_LABELS[key], avail.counts[key]);
+        }
+        rows += legendRow(GENRE_COLORS.other, GENRE_LABELS.other, null);
+        rows += legendRow('#8b5cf6', 'Эмоции', emotionCount, 'pl-map-legend__row--emotion');
+        legendModal.innerHTML =
+            '<button type="button" class="pl-map-legend-modal__close" aria-label="Закрыть легенду">&times;</button>' +
+            '<div class="pl-map-legend-modal__title">Что означают цвета</div>' + rows;
+        var closeBtn = legendModal.querySelector('.pl-map-legend-modal__close');
+        if (closeBtn) closeBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeLegend();
+        });
+        legendOverlay.classList.add('pl-map-legend-overlay--show');
+        legendModal.classList.add('pl-map-legend-modal--open');
+        legendModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeLegend() {
+        var closed = false;
+        if (legendModal && legendModal.classList.contains('pl-map-legend-modal--open')) {
+            legendModal.classList.remove('pl-map-legend-modal--open');
+            legendModal.setAttribute('aria-hidden', 'true');
+            closed = true;
+        }
+        if (legendOverlay && legendOverlay.classList.contains('pl-map-legend-overlay--show')) {
+            legendOverlay.classList.remove('pl-map-legend-overlay--show');
+            closed = true;
+        }
+        return closed;
+    }
+
     function buildControls() {
         var controls = el('div', 'pl-map-controls');
 
@@ -2230,9 +2304,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         controls.appendChild(fsBtn);
 
         var filterDefs = [
-            { key: 'live', label: 'Live', cls: 'pl-map-filter-btn--live', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
-            { key: 'pop', label: 'Pop', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-microphone" aria-hidden="true"></i>' },
-            { key: 'classic', label: 'Classic', cls: 'pl-map-filter-btn--classic', icon: '<svg viewBox="0 0 24 26" width="18" height="18" fill="currentColor" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M12 .7a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm0 .9a.6.6 0 110 1.2.6.6 0 010-1.2z"/><rect x="11.2" y="2.5" width="1.6" height="2" rx=".5"/><rect x="10.4" y="3" width=".8" height=".5" rx=".25"/><rect x="12.8" y="3" width=".8" height=".5" rx=".25"/><path d="M11.35 4.4h1.3l.3 5.4h-1.9z"/><path d="M12 9.8C10.1 9.8 8.3 11.2 8.3 13c0 1.4.9 2.3 1.7 2.9-.5.5-.5 1.2 0 1.7-1.2.7-2.3 1.9-2.3 3.1 0 1.4 2 2.3 4.3 2.3s4.3-.9 4.3-2.3c0-1.2-1.1-2.4-2.3-3.1.5-.5.5-1.2 0-1.7.8-.6 1.7-1.5 1.7-2.9 0-1.8-1.8-3.2-3.7-3.2z"/><path d="M11.05 9.8h1.9l.45 7h-2.8z"/><path d="M11.15 17.9h1.7l.5 2.5c.1.5-.3 1-.9 1h-.9c-.6 0-1-.5-.9-1z"/><rect x="11.78" y="22.9" width=".44" height="2.6" rx=".22"/></svg>' }
+            { key: 'music', label: 'Музыка', cls: 'pl-map-filter-btn--music', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
+            { key: 'stage', label: 'Кино и сцена', cls: 'pl-map-filter-btn--stage', icon: '<i class="fas fa-clapperboard" aria-hidden="true"></i>' },
+            { key: 'talk', label: 'Юмор и игры', cls: 'pl-map-filter-btn--talk', icon: '<i class="fas fa-microphone" aria-hidden="true"></i>' },
+            { key: 'expo', label: 'Выставки и знания', cls: 'pl-map-filter-btn--expo', icon: '<i class="fas fa-landmark" aria-hidden="true"></i>' }
         ];
         for (var fi = 0; fi < filterDefs.length; fi++) {
             (function (def) {
@@ -2264,6 +2339,18 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             setEmotionsVisible(on);
         });
         controls.appendChild(emoBtn);
+
+        // Легенда карты: только просмотр (фильтры — отдельными кнопками выше).
+        var legendBtn = el('button', 'pl-map-control-btn pl-map-legend-btn', '<i class="fas fa-circle-question" aria-hidden="true"></i>');
+        legendBtn.type = 'button';
+        legendBtn.title = 'Легенда карты: что означает каждый цвет';
+        legendBtn.setAttribute('aria-label', 'Открыть легенду карты');
+        legendBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (isLegendOpen()) closeLegend();
+            else openLegend();
+        });
+        controls.appendChild(legendBtn);
 
         var zoomIn = el('button', 'pl-map-control-btn pl-map-zoom-btn pl-map-zoom-btn--in', '<i class="fas fa-plus" aria-hidden="true"></i>');
         zoomIn.type = 'button';
@@ -2378,6 +2465,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             render: function (ctx) {
                 var map = ctx.map;
                 var features = ctx.features;
+                // Эмоции — всегда отдельными маркерами, вне кластеров.
+                var soloEmotions = [];
+                var pool = [];
+                for (var fi = 0; fi < features.length; fi++) {
+                    var fpr = features[fi].properties || {};
+                    if (fpr.featureType === 'emotion') soloEmotions.push(features[fi]);
+                    else pool.push(features[fi]);
+                }
+                features = pool;
                 var projection = map.projection;
                 var worldPerPx = 1 / (128 * Math.pow(2, map.zoom));
                 var r = (typeof px === 'function' ? px(map.zoom) : px) * worldPerPx;
@@ -2421,6 +2517,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 }
 
                 var out = [];
+                // Эмоции вне кластера — отдельными маркерами как есть
+                for (var se = 0; se < soloEmotions.length; se++) {
+                    out.push({ lnglat: soloEmotions[se].geometry.coordinates, clusterId: String(soloEmotions[se].id), features: [soloEmotions[se]] });
+                }
                 Object.keys(groups).forEach(function (root) {
                     var group = groups[root];
                     if (group.length === 1) {
@@ -2648,13 +2748,14 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (!target || !target.closest) return;
 
             if (target.closest && (
-                target.closest('.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-calendar-modal, .pl-map-calendar-overlay') ||
+                target.closest('.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-calendar-modal, .pl-map-calendar-overlay, .pl-map-legend-modal, .pl-map-legend-overlay') ||
                 target.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]') ||
                 (target.closest('#map button, #map a') && !target.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion'))
             )) return;
 
             var wasBalloon = !!state.balloonOpenId;
             var wasEmotionPop = !!(emotionOpenId && emotionPopEl && emotionPopEl.parentNode);
+            var wasLegend = isLegendOpen();
             var wasFlower = isFlowerOpen();
             var wasPropose = !!(state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open'));
             var wasComposer = !!(window.__PermLiveMapEmotionOpen);
@@ -2664,7 +2765,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (wasEmotionPop) hideEmotionPop();
             if (wasComposer) hideEmotionComposer();
             if (wasBalloon) closeBalloon();
-            if (wasBalloon || wasEmotionPop || wasFlower || wasPropose || wasComposer || wasSiteUI) {
+            if (wasLegend) closeLegend();
+            if (wasBalloon || wasEmotionPop || wasFlower || wasPropose || wasComposer || wasSiteUI || wasLegend) {
                 clearFlowerTap();
                 return;
             }
@@ -2710,6 +2812,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
                     if (state.balloonOpenId && Date.now() - state.balloonOpenedAt > 600) closeBalloon();
                     if (emotionOpenId) hideEmotionPop();
+                    if (isLegendOpen()) closeLegend();
                     if (isFlowerOpen()) hideFlower();
                     if (state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open')) hideProposeComposer();
                 });
