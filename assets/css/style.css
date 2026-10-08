@@ -448,3 +448,53 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail__site-link{margin-top:14px;text-align:center}
 .detail__site-link a{font-size:13px;color:#888;text-decoration:underline;text-underline-offset:2px}
 .detail__skeleton{padding:24px;text-align:center;color:#999}
+
+/* Города — как /cities/ на сайте: выбор + карта России */
+.cities-page{padding:16px 4px;max-width:780px;margin:0 auto}
+.cities-main-title{font-size:22px;margin:4px 0 8px;display:flex;align-items:center;gap:10px}
+.cities-main-title::before{content:'\f64f';font-family:'Font Awesome 6 Free';font-weight:900;color:var(--red);font-size:18px}
+.cities-subtitle{color:#666;margin:0 0 0 2px;font-size:14px;line-height:1.5}
+.cities-toolbar{display:flex;gap:10px;margin:16px 0 4px;flex-wrap:wrap}
+.cities-filter{flex:1;min-width:200px;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.12);font-size:15px;background:#fff;color:inherit;font-family:inherit}
+.cities-filter::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.cities-geo-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:1px solid rgba(0,0,0,.12);background:#fff;cursor:pointer;font-size:15px;color:inherit;font-family:inherit}
+.cities-geo-btn:hover{border-color:#b9b9b9}
+.cities-geo-btn:disabled{opacity:.6;cursor:wait}
+.cities-geo-hint{margin:8px 0;color:#666;font-size:14px}
+.cities-group{margin-top:22px}
+.cities-group-title{display:flex;align-items:center;gap:8px;font-size:18px;margin:0 0 10px}
+.cities-group-title::before{content:'\f3c5';font-family:'Font Awesome 6 Free';font-weight:900;color:var(--red);font-size:15px}
+.cities-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;align-items:stretch}
+.city-card{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,.1);background:#fff;color:inherit;height:100%;min-height:62px;cursor:pointer;font-family:inherit;font-size:inherit;text-align:left;width:100%}
+.city-card:hover{border-color:#b9b9b9;color:inherit}
+.city-card.active{border-color:var(--red)}
+.city-card--suggest{outline:2px solid var(--red);outline-offset:2px}
+.city-card-ico{color:#999;flex-shrink:0}
+.city-card-name{flex:1;font-weight:600;line-height:1.3;min-width:0}
+.city-card .fa-check{flex-shrink:0;color:var(--red)}
+.cities-page .city-count-badge{font-size:13px;font-weight:600;line-height:1;padding:5px 9px;border-radius:999px;white-space:nowrap;background:rgba(225,68,37,.1);color:var(--red);flex-shrink:0}
+.cities-page .city-count-badge.is-zero{background:rgba(127,127,127,.12);color:inherit;opacity:.65;font-weight:500}
+.cities-dropdown-all{display:flex;align-items:center;justify-content:center;gap:8px;margin:4px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;color:var(--red);cursor:pointer;border-top:1px solid rgba(0,0,0,.07)}
+.cities-dropdown-all:hover{background:#f5f5f5}
+.cities-map-section{margin-top:28px}
+.cities-map-title{display:flex;align-items:center;gap:8px;font-size:18px;margin:0 0 12px}
+.cities-map-title::before{content:'\f5a0';font-family:'Font Awesome 6 Free';font-weight:900;color:var(--red);font-size:15px}
+.cities-map-wrap{position:relative}
+#cities-russia-map{height:380px;border-radius:16px;overflow:hidden;border:1px solid rgba(0,0,0,.1);background:#eef3f6}
+.cities-map-zoom{position:absolute;top:12px;right:12px;z-index:5;display:flex;flex-direction:column;gap:8px}
+.cities-map-zoom button{width:38px;height:38px;padding:0;border:0;border-radius:50%;background:#fff;color:#222;font-size:15px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center}
+.cities-map-zoom button:hover{background:#f5f5f5}
+.cities-map-pin{display:flex;align-items:center;gap:6px;border:0;padding:0;background:transparent;cursor:pointer;transform:translate(-8px,-8px);font-family:inherit}
+.cities-map-pin__dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;background:var(--red);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.cities-map-pin.is-zero .cities-map-pin__dot{background:#8a8a8a}
+.cities-map-pin.active .cities-map-pin__dot{background:#111}
+.cities-map-pin__label{font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;background:rgba(255,255,255,.95);color:#222;border-radius:999px;padding:4px 9px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.cities-map-pin.active .cities-map-pin__label{background:#111;color:#fff}
+.cities-map-fallback{margin-top:10px;font-size:14px;color:#666}
+@media (max-width:640px){
+  .cities-grid{grid-template-columns:1fr}
+  #cities-russia-map{height:300px}
+  .cities-toolbar{flex-direction:column;align-items:stretch}
+  .cities-filter{min-width:0;width:100%}
+  .cities-geo-btn{justify-content:center}
+}

@@ -27,6 +27,7 @@ const els = {
   viewFeed: $('#view-feed'),
   viewMap: $('#view-map'),
   viewAdd: $('#view-add'),
+  viewCities: $('#view-cities'),
   calendarInner: $('#calendar-dates-inner'),
   foryouRow: $('#foryou-row'),
   sliderForyou: $('#slider-foryou'),
@@ -393,7 +394,8 @@ function renderCityDropdown(){
     return `<a class="city-dropdown-item${active?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
       `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>${count}`+
       (active ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
-  }).join('');
+  }).join('') + `<a class="cities-dropdown-all" role="menuitem" data-city-all="1">`+
+    `<i class="fa-solid fa-map-location-dot"></i><span>Все города</span></a>`;
   menu.querySelectorAll('[data-city-slug]').forEach(function(a){
     a.onclick = function(e){
       e.preventDefault();
@@ -401,6 +403,14 @@ function renderCityDropdown(){
       const slug = a.getAttribute('data-city-slug');
       closeCityDropdown();
       if(slug && slug!==state.city) switchCity(slug);
+    };
+  });
+  menu.querySelectorAll('[data-city-all]').forEach(function(a){
+    a.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      closeCityDropdown();
+      switchTab('cities');
     };
   });
 }
@@ -452,6 +462,7 @@ function closeCityDropdown(){
 // «Предложить событие» — отдельная кнопка справа, не пункт меню.
 function currentSection(){
   if(state.tab==='map') return 'map';
+  if(state.tab==='cities') return 'cities';
   if(state.timelineMode) return 'timeline';
   return 'feed';
 }
@@ -461,6 +472,7 @@ function updateSectionsUI(){
     feed: {label:'Календарь', icon:'far fa-calendar-alt'},
     map: {label:'Карта', icon:'fa-solid fa-location-dot'},
     timeline: {label:'Таймлайн', icon:'fa-solid fa-list-ul'},
+    cities: {label:'Все города', icon:'fa-solid fa-city'},
   }[sec] || {label:'Календарь', icon:'far fa-calendar-alt'};
   if(els.sectionsLabel) els.sectionsLabel.textContent = conf.label;
   if(els.sectionsIcon) els.sectionsIcon.className = conf.icon;
@@ -525,6 +537,9 @@ async function switchCity(slug, opts){
   state.todayISO = cityTodayISO(slug);
   try{ localStorage.setItem(CITY_LS_KEY, slug); }catch(e){}
   updateCityUI();
+  renderCityDropdown();
+  // выбор из хедера, оставаясь на странице городов, — подсветить новый активный
+  if(state.tab==='cities'){ try{ renderCitiesPage(); }catch(e){} }
   // как переход на главную нового города на сайте: фильтры сбрасываются
   state.selectedDate=null;
   state.range=null;
@@ -551,6 +566,259 @@ async function switchCity(slug, opts){
   try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
   const _c = cityBySlug(slug);
   toast('Город: '+(_c ? _c.name : slug));
+}
+
+// ---------- Страница «Все города» — как /cities/ на сайте ----------
+// Группы — зеркало cities_view.GROUPS (homepage/views.py); порядок внутри —
+// sort_order из /api/cities/, неизвестные слаги — в «Другие».
+const CITY_GROUPS = [
+  ['Столицы', ['moscow', 'spb']],
+  ['Юг', ['krasnodar', 'rostov', 'sochi', 'novorossiysk', 'volgograd', 'voronezh']],
+  ['Поволжье', ['nizhniy', 'kazan', 'samara', 'saratov']],
+  ['Урал', ['perm', 'ekb', 'ufa', 'chelyabinsk', 'tyumen', 'kirov', 'izhevsk']],
+  ['Сибирь', ['novosibirsk', 'omsk', 'krasnoyarsk', 'irkutsk']],
+  ['Дальний Восток', ['khabarovsk', 'vladivostok', 'yakutsk']],
+  ['Север', ['murmansk', 'arkhangelsk', 'syktyvkar']],
+  ['Запад', ['kaliningrad']],
+];
+function plural(n, one, few, many){
+  n = Math.abs(Number(n)) || 0;
+  const d10 = n % 10, d100 = n % 100;
+  if(d10 === 1 && d100 !== 11) return one;
+  if(d10 >= 2 && d10 <= 4 && (d100 < 10 || d100 >= 20)) return few;
+  return many;
+}
+let citiesMap = null, citiesMapZoom = 3, citiesYmapsPromise = null, citiesWired = false;
+
+function citiesList(){
+  return state.cities.length ? state.cities : CITY_FALLBACK;
+}
+
+async function pickCity(slug){
+  slug = (slug || '').toLowerCase();
+  if(!cityBySlug(slug)) slug = 'perm';
+  if(slug !== state.city) await switchCity(slug);
+  goHome();
+}
+
+function renderCitiesPage(){
+  const groupsEl = document.getElementById('cities-groups');
+  const subEl = document.getElementById('cities-subtitle');
+  if(!groupsEl) return;
+  const list = citiesList();
+  const bySlug = {};
+  list.forEach(c => { bySlug[c.slug] = c; });
+  const used = new Set();
+  const groups = CITY_GROUPS.map(([title, slugs]) => ({
+    title,
+    cities: slugs.map(s => bySlug[s]).filter(c => c && !used.has(c.slug) && (used.add(c.slug), true))
+  })).filter(g => g.cities.length);
+  const rest = list.filter(c => !used.has(c.slug));
+  if(rest.length) groups.push({title: 'Другие', cities: rest});
+  groups.forEach(g => g.cities.sort((a, b) =>
+    (a.sort_order ?? 100) - (b.sort_order ?? 100) || String(a.name || '').localeCompare(String(b.name || ''), 'ru')));
+  const totalEvents = list.reduce((s, c) => s + (Number(c.event_count) || 0), 0);
+  if(subEl) subEl.innerHTML = `Афиша ${totalEvents} ${plural(totalEvents, 'концерт', 'концерта', 'концертов')} в ${list.length} ${plural(list.length, 'городе', 'городах', 'городах')} России`;
+  groupsEl.innerHTML = groups.map(g => `
+    <section class="cities-group" data-group="${esc(g.title)}">
+      <h2 class="cities-group-title">${esc(g.title)}</h2>
+      <div class="cities-grid">
+        ${g.cities.map(c => {
+          const n = Number(c.event_count) || 0;
+          const active = c.slug === state.city;
+          return `<button type="button" class="city-card${active ? ' active' : ''}" data-city-slug="${esc(c.slug)}" data-city-name="${esc(String(c.name || '').toLowerCase())}">
+            <i class="fa-solid fa-city city-card-ico"></i>
+            <span class="city-card-name">${esc(c.name)}</span>
+            <span class="city-count-badge${n ? '' : ' is-zero'}">${n}</span>
+            ${active ? `<i class="fa-solid fa-check"></i>` : ''}
+          </button>`;
+        }).join('')}
+      </div>
+    </section>`).join('');
+  groupsEl.querySelectorAll('[data-city-slug]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const slug = btn.getAttribute('data-city-slug');
+      try{ localStorage.setItem(CITY_LS_KEY, slug); }catch(e){}
+      pickCity(slug);
+    });
+  });
+  applyCitiesFilter();
+  refreshCitiesPins();
+  ensureCitiesMap();
+}
+
+function applyCitiesFilter(){
+  const input = document.getElementById('cities-filter');
+  const q = ((input && input.value) || '').trim().toLowerCase();
+  document.querySelectorAll('#cities-groups .cities-group').forEach(function(g){
+    let visible = 0;
+    g.querySelectorAll('.city-card').forEach(function(card){
+      const hit = !q || (card.getAttribute('data-city-name') || '').indexOf(q) !== -1;
+      card.style.display = hit ? '' : 'none';
+      if(hit) visible++;
+    });
+    g.style.display = visible ? '' : 'none';
+  });
+}
+
+function citiesSay(msg){
+  const hint = document.getElementById('cities-geo-hint');
+  if(!hint) return;
+  hint.textContent = msg;
+  hint.style.display = '';
+}
+
+// Гео как на /cities/: ближайший по haversine; <150 км — сразу переходим,
+// дальше — подсвечиваем подсказку.
+function citiesGeo(){
+  const btn = document.getElementById('cities-geo');
+  if(btn) btn.disabled = true;
+  citiesSay('Определяем местоположение…');
+  const getCoords = () => new Promise(function(resolve){
+    let done = false;
+    const finish = (v) => { if(!done){ done = true; resolve(v); } };
+    try{
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(
+          (pos) => finish({lat: pos.coords.latitude, lon: pos.coords.longitude}),
+          () => finish(null),
+          {timeout: 8000, maximumAge: 600000}
+        );
+        setTimeout(() => finish(null), 9000);
+      } else finish(null);
+    }catch(e){ finish(null); }
+  });
+  const bridgeCoords = () => {
+    try{
+      if(bridge) return bridge.send('VKWebAppGetGeodata').then(
+        g => (g && isFinite(Number(g.lat)) && isFinite(Number(g.long))) ? {lat: Number(g.lat), lon: Number(g.long)} : null,
+        () => null);
+    }catch(e){}
+    return Promise.resolve(null);
+  };
+  getCoords().then(async function(coords){
+    if(!coords) coords = await bridgeCoords();
+    if(btn) btn.disabled = false;
+    if(!coords){ citiesSay('Не получилось определить местоположение'); return; }
+    const n = nearestCity(coords.lat, coords.lon);
+    if(!n.slug){ citiesSay('Не получилось сопоставить города'); return; }
+    const card = document.querySelector(`#cities-groups .city-card[data-city-slug="${n.slug}"]`);
+    const c = cityBySlug(n.slug);
+    const name = c ? c.name : n.slug;
+    if(n.dist < CITY_GEO_RADIUS_KM){
+      try{ localStorage.setItem(CITY_LS_KEY, n.slug); }catch(e){}
+      pickCity(n.slug);
+    } else {
+      citiesSay(`Ближайший город — ${name} (${Math.round(n.dist)} км). Нажми на него, чтобы перейти.`);
+      if(card){
+        card.classList.add('city-card--suggest');
+        card.scrollIntoView({block: 'center', behavior: 'smooth'});
+      }
+    }
+  });
+}
+
+function loadCitiesYmaps(){
+  if(window.ymaps3 && window.ymaps3.ready){ return window.ymaps3.ready; }
+  if(citiesYmapsPromise) return citiesYmapsPromise;
+  citiesYmapsPromise = new Promise(function(resolve, reject){
+    try{
+      const key = (window.PermLiveMapSettings && window.PermLiveMapSettings.apiKey) || '';
+      const s = document.createElement('script');
+      s.src = 'https://api-maps.yandex.ru/v3/?apikey=' + encodeURIComponent(key) + '&lang=ru_RU';
+      s.async = true;
+      s.onload = function(){
+        if(!window.ymaps3){ reject(new Error('ymaps3 missing')); return; }
+        window.ymaps3.ready.then(resolve).catch(reject);
+      };
+      s.onerror = function(){ reject(new Error('ymaps load failed')); };
+      document.head.appendChild(s);
+    }catch(e){ reject(e); }
+  });
+  return citiesYmapsPromise;
+}
+
+function refreshCitiesPins(){
+  try{
+    document.querySelectorAll('#cities-russia-map .cities-map-pin').forEach(function(pin){
+      const active = pin.getAttribute('data-city-slug') === state.city;
+      pin.classList.toggle('active', active);
+    });
+  }catch(e){}
+}
+
+function ensureCitiesMap(){
+  const mapEl = document.getElementById('cities-russia-map');
+  if(!mapEl || !els.viewCities || !els.viewCities.classList.contains('view--active')) return;
+  const pts = citiesList().filter(c =>
+    typeof c.lat === 'number' && typeof c.lon === 'number' && isFinite(c.lat) && isFinite(c.lon)
+  ).map(c => ({slug: c.slug, name: c.name, count: Number(c.event_count) || 0, lat: c.lat, lon: c.lon}));
+  if(!pts.length){
+    const sec = document.getElementById('cities-map-section');
+    if(sec) sec.style.display = 'none';
+    return;
+  }
+  if(citiesMap){ refreshCitiesPins(); return; }
+  let sumLon = 0, sumLat = 0;
+  pts.forEach(p => { sumLon += p.lon; sumLat += p.lat; });
+  // Как на сайте: среднее + сдвиг, чтобы влезли Сибирь и юг.
+  const center = [(sumLon / pts.length + 62) / 2, (sumLat / pts.length + 58) / 2];
+  const changeZoomBy = (d) => {
+    let cur = citiesMapZoom;
+    try{ if(citiesMap && typeof citiesMap.zoom === 'number') cur = citiesMap.zoom; }catch(e){}
+    const z = Math.min(10, Math.max(2, cur + d));
+    citiesMapZoom = z;
+    if(citiesMap && citiesMap.setLocation){
+      try{ citiesMap.setLocation({zoom: z, duration: 200}); }catch(e2){}
+    }
+  };
+  const zin = document.getElementById('cities-zoom-in');
+  const zout = document.getElementById('cities-zoom-out');
+  if(zin && !zin._wired){ zin._wired = true; zin.addEventListener('click', () => changeZoomBy(1)); }
+  if(zout && !zout._wired){ zout._wired = true; zout.addEventListener('click', () => changeZoomBy(-1)); }
+  loadCitiesYmaps().then(function(ymaps3){
+    if(citiesMap || !document.body.contains(mapEl)) return;
+    const map = new ymaps3.YMap(mapEl, {
+      location: {center: center, zoom: citiesMapZoom},
+      mode: 'raster',
+      theme: 'light',
+      behaviors: ['drag', 'pinchZoom', 'dblClick', 'scrollZoom']
+    });
+    citiesMap = map;
+    try{ if(typeof map.zoom === 'number') citiesMapZoom = map.zoom; }catch(e){}
+    map.addChild(new ymaps3.YMapDefaultSchemeLayer({theme: 'light'}));
+    map.addChild(new ymaps3.YMapDefaultFeaturesLayer({zIndex: 1800}));
+    pts.forEach(function(p){
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cities-map-pin' + (p.count === 0 ? ' is-zero' : '') + (p.slug === state.city ? ' active' : '');
+      btn.setAttribute('data-city-slug', p.slug);
+      btn.title = `${p.name} — ${p.count} ${plural(p.count, 'событие', 'события', 'событий')}`;
+      const dot = document.createElement('span');
+      dot.className = 'cities-map-pin__dot';
+      const label = document.createElement('span');
+      label.className = 'cities-map-pin__label';
+      label.textContent = `${p.name} (${p.count})`;
+      btn.appendChild(dot);
+      btn.appendChild(label);
+      btn.addEventListener('click', function(){
+        try{ localStorage.setItem(CITY_LS_KEY, p.slug); }catch(e){}
+        pickCity(p.slug);
+      });
+      map.addChild(new ymaps3.YMapMarker({coordinates: [p.lon, p.lat]}, btn));
+    });
+  }).catch(function(){
+    mapEl.innerHTML = '<p class="cities-map-fallback" style="padding:16px">Карту не удалось загрузить — выбери город из списка выше.</p>';
+  });
+}
+
+function wireCitiesPage(){
+  if(citiesWired) return;
+  citiesWired = true;
+  const input = document.getElementById('cities-filter');
+  if(input) input.addEventListener('input', applyCitiesFilter);
+  const geo = document.getElementById('cities-geo');
+  if(geo) geo.addEventListener('click', citiesGeo);
 }
 
 function rebuildPools(){
@@ -1452,6 +1720,7 @@ async function openDetail(slug, push=true){
   els.viewFeed.classList.remove('view--active');
   els.viewMap.classList.remove('view--active');
   if(els.viewAdd) els.viewAdd.classList.remove('view--active');
+  if(els.viewCities) els.viewCities.classList.remove('view--active');
   els.viewDetail.classList.add('view--active');
   $$('.pl-header-link').forEach(a=>a.classList.remove('active'));
   $$('.pl-tabbar__btn').forEach(b=>{ b.classList.remove('pl-tabbar__btn--active'); b.setAttribute('aria-selected','false'); });
@@ -2032,6 +2301,7 @@ function switchTab(tab, keepHistory){
   els.viewFeed.classList.toggle('view--active', tab==='feed');
   els.viewMap.classList.toggle('view--active', tab==='map');
   if(els.viewAdd) els.viewAdd.classList.toggle('view--active', tab==='add');
+  if(els.viewCities) els.viewCities.classList.toggle('view--active', tab==='cities');
   if(els.viewDetail) els.viewDetail.classList.toggle('view--active', tab==='detail');
   if(tab==='map'){
     // жёстко в начало: мгновенно (не smooth), все скролл-контейнеры + скролл VK-клиента
@@ -2051,6 +2321,13 @@ function switchTab(tab, keepHistory){
     setTimeout(redo, 350);
     setTimeout(()=>{ try{ document.documentElement.scrollTop=0; }catch(e){} try{ document.body.scrollTop=0; }catch(e){} try{ window.scrollTo({top:0,behavior:'auto'}); }catch(e){} redo(); }, 800);
     try{ bridge && bridge.send('VKWebAppSetViewSettings',{status_bar_style:'light', action_bar_color:'#ffffff'});}catch(e){}
+  }
+  if(tab==='cities'){
+    try{ document.documentElement.scrollTop=0; }catch(e){}
+    try{ document.body.scrollTop=0; }catch(e){}
+    try{ window.scrollTo({top:0,behavior:'auto'}); }catch(e){}
+    try{ wireCitiesPage(); }catch(e){}
+    try{ renderCitiesPage(); }catch(e){ console.warn('cities paint failed', e); }
   }
   if(!keepHistory){
     try{
@@ -2097,6 +2374,7 @@ function wire(){
         closeSectionsDropdown();
         if(sec==='map') switchTab('map');
         else if(sec==='timeline') openUpcomingTimeline();
+        else if(sec==='cities') switchTab('cities');
         else goHome();
       });
     });
@@ -2354,7 +2632,10 @@ function wire(){
   renderCalendarStrip();
   renderSliderSkeletons();
   // справочник городов фоном — подтянет названия/счётчики в дропдаун
-  loadCities().then(function(){ updateCityUI(); renderCityDropdown(); }).catch(function(){});
+  loadCities().then(function(){
+    updateCityUI(); renderCityDropdown();
+    if(state.tab==='cities'){ try{ renderCitiesPage(); }catch(e){} }
+  }).catch(function(){});
   // insets VK — в фоне, first paint их не ждёт
   (async()=>{
     try{
@@ -2401,6 +2682,7 @@ function wire(){
   const tab=params.get('tab')||params.get('vk_tab');
   if(tab==='map') switchTab('map');
   else if(tab==='add') switchTab('add');
+  else if(tab==='cities') switchTab('cities');
   else {
     // уже на feed, но header active нужно обновить после load
     $$('.pl-header-link').forEach(a=>{

@@ -52,6 +52,7 @@
           <a class="sections-dropdown-item" role="menuitem" href="#" data-section="feed"><i class="far fa-calendar-alt"></i><span>Календарь</span><i class="fa-solid fa-check" style="display:none"></i></a>
           <a class="sections-dropdown-item" role="menuitem" href="#" data-section="map"><i class="fa-solid fa-location-dot"></i><span>Карта</span><i class="fa-solid fa-check" style="display:none"></i></a>
           <a class="sections-dropdown-item" role="menuitem" href="#" data-section="timeline"><i class="fa-solid fa-list-ul"></i><span>Таймлайн</span><i class="fa-solid fa-check" style="display:none"></i></a>
+          <a class="sections-dropdown-item" role="menuitem" href="#" data-section="cities"><i class="fa-solid fa-city"></i><span>Все города</span><i class="fa-solid fa-check" style="display:none"></i></a>
         </div>
       </div>
       <button type="button" class="propose-btn" id="propose-btn" aria-label="Предложить событие">
@@ -162,6 +163,33 @@
       <!-- Controls injected by JS -->
     </section>
 
+    <!-- CITIES VIEW (как /cities/ на сайте: выбор + карта России) -->
+    <section id="view-cities" class="view">
+      <div class="cities-page">
+        <h1 class="cities-main-title">Выбери свой город</h1>
+        <p class="cities-subtitle" id="cities-subtitle"></p>
+        <div class="cities-toolbar">
+          <input type="search" id="cities-filter" class="cities-filter" placeholder="Найти город…" autocomplete="off" aria-label="Найти город">
+          <button type="button" id="cities-geo" class="cities-geo-btn">
+            <i class="fa-solid fa-location-crosshairs"></i>
+            <span>Определить</span>
+          </button>
+        </div>
+        <p class="cities-geo-hint" id="cities-geo-hint" style="display:none"></p>
+        <div id="cities-groups"></div>
+        <section class="cities-map-section" id="cities-map-section">
+          <h2 class="cities-map-title">Карта городов</h2>
+          <div class="cities-map-wrap">
+            <div id="cities-russia-map" role="application" aria-label="Карта России с городами"></div>
+            <div class="cities-map-zoom" role="group" aria-label="Масштаб карты">
+              <button type="button" id="cities-zoom-in" aria-label="Приблизить карту" title="Приблизить"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" id="cities-zoom-out" aria-label="Отдалить карту" title="Отдалить"><i class="fa-solid fa-minus"></i></button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
     <!-- DETAIL VIEW -->
     <section id="view-detail" class="view">
       <div id="detail-content" class="detail"></div>
@@ -205,6 +233,9 @@
     </button>
     <button class="pl-tabbar__btn" id="tabbar-timeline" role="tab" aria-selected="false" aria-label="Таймлайн">
       <i class="fa-solid fa-list-ul"></i><span>Таймлайн</span>
+    </button>
+    <button class="pl-tabbar__btn" data-tab="cities" role="tab" aria-selected="false">
+      <i class="fa-solid fa-city"></i><span>Города</span>
     </button>
     <button class="pl-tabbar__btn" data-tab="add" role="tab" aria-selected="false">
       <i class="fa-solid fa-plus"></i><span>Предложить</span>
