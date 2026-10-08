@@ -138,8 +138,9 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .city-dropdown-btn .fa-city{color:var(--red)}
 .city-dropdown-chevron{font-size:10px;color:var(--muted);transition:transform .18s}
 .city-dropdown.open .city-dropdown-chevron{transform:rotate(180deg)}
-.city-dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;display:none;z-index:60}
+.city-dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;max-height:min(70vh,480px);overflow-y:auto;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:6px;display:none;z-index:60}
 .city-dropdown.open .city-dropdown-menu{display:block}
+.city-dropdown-group-title{padding:8px 12px 2px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .city-dropdown-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;cursor:pointer}
 .city-dropdown-item:hover{background:#f5f5f5}
 .city-dropdown-item.active{font-weight:700;color:var(--red)}

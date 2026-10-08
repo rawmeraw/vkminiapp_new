@@ -387,14 +387,19 @@ function renderCityDropdown(){
   const menu = els.cityMenu;
   if(!menu) return;
   const list = state.cities.length ? state.cities : CITY_FALLBACK;
-  menu.innerHTML = list.map(function(c){
+  const groups = groupCities(list);
+  const item = function(c){
     const active = c.slug===state.city;
     const count = (typeof c.event_count==='number' && c.event_count>0)
       ? `<span class="city-count-badge">${c.event_count}</span>` : '';
     return `<a class="city-dropdown-item${active?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
       `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>${count}`+
       (active ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
-  }).join('') + `<a class="cities-dropdown-all" role="menuitem" data-city-all="1">`+
+  };
+  menu.innerHTML = groups.map(g =>
+    `<div class="city-dropdown-group-title">${esc(g.title)}</div>` +
+    g.cities.map(item).join('')
+  ).join('') + `<a class="cities-dropdown-all" role="menuitem" data-city-all="1">`+
     `<i class="fa-solid fa-map-location-dot"></i><span>Все города</span></a>`;
   menu.querySelectorAll('[data-city-slug]').forEach(function(a){
     a.onclick = function(e){
@@ -594,6 +599,24 @@ function citiesList(){
   return state.cities.length ? state.cities : CITY_FALLBACK;
 }
 
+// Группировка городов по регионам (те же CITY_GROUPS, что на /cities/):
+// известные слаги — по своим группам, неизвестные — в «Другие».
+// Используется и страницей городов, и дропдауном в шапке.
+function groupCities(list){
+  const bySlug = {};
+  list.forEach(c => { bySlug[c.slug] = c; });
+  const used = new Set();
+  const groups = CITY_GROUPS.map(([title, slugs]) => ({
+    title,
+    cities: slugs.map(s => bySlug[s]).filter(c => c && !used.has(c.slug) && (used.add(c.slug), true))
+  })).filter(g => g.cities.length);
+  const rest = list.filter(c => !used.has(c.slug));
+  if(rest.length) groups.push({title: 'Другие', cities: rest});
+  groups.forEach(g => g.cities.sort((a, b) =>
+    (a.sort_order ?? 100) - (b.sort_order ?? 100) || String(a.name || '').localeCompare(String(b.name || ''), 'ru')));
+  return groups;
+}
+
 async function pickCity(slug){
   slug = (slug || '').toLowerCase();
   if(!cityBySlug(slug)) slug = 'perm';
@@ -606,17 +629,7 @@ function renderCitiesPage(){
   const subEl = document.getElementById('cities-subtitle');
   if(!groupsEl) return;
   const list = citiesList();
-  const bySlug = {};
-  list.forEach(c => { bySlug[c.slug] = c; });
-  const used = new Set();
-  const groups = CITY_GROUPS.map(([title, slugs]) => ({
-    title,
-    cities: slugs.map(s => bySlug[s]).filter(c => c && !used.has(c.slug) && (used.add(c.slug), true))
-  })).filter(g => g.cities.length);
-  const rest = list.filter(c => !used.has(c.slug));
-  if(rest.length) groups.push({title: 'Другие', cities: rest});
-  groups.forEach(g => g.cities.sort((a, b) =>
-    (a.sort_order ?? 100) - (b.sort_order ?? 100) || String(a.name || '').localeCompare(String(b.name || ''), 'ru')));
+  const groups = groupCities(list);
   const totalEvents = list.reduce((s, c) => s + (Number(c.event_count) || 0), 0);
   if(subEl) subEl.innerHTML = `Афиша ${totalEvents} ${plural(totalEvents, 'концерт', 'концерта', 'концертов')} в ${list.length} ${plural(list.length, 'городе', 'городах', 'городах')} России`;
   groupsEl.innerHTML = groups.map(g => `
