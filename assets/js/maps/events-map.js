@@ -1200,6 +1200,28 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return isNaN(n) || n < 0 ? 0 : n;
     }
 
+    function emotionRepliesCount(em) {
+        var n = parseInt(em && (em.replies_count || 0), 10);
+        return isNaN(n) || n < 0 ? 0 : n;
+    }
+
+    function vkCtx() {
+        try { return window.PermLiveMapVk || null; } catch (e) { return null; }
+    }
+
+    function vkHasAccount() {
+        /* ME.is_auth выставляет app.js только для привязанных (has_user=true) */
+        return !!(ME && ME.is_auth);
+    }
+
+    function vkReplyPayloadExtra() {
+        var v = vkCtx() || {};
+        var out = {};
+        if (v.vk_user_id) out.vk_user_id = v.vk_user_id;
+        if (v.vk_params) out.vk_params = v.vk_params;
+        return out;
+    }
+
     function emotionMarkerSize(em) {
         return 40 + Math.min(emotionLikesCount(em), 10) * 3;
     }
@@ -1227,6 +1249,32 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             badge.style.display = '';
         } else if (badge) {
             badge.style.display = 'none';
+        }
+        var rbadge = markerEl.querySelector('.pl-map-emotion__replies-badge');
+        var rn = emotionRepliesCount(em);
+        if (rn > 0) {
+            if (!rbadge) {
+                rbadge = document.createElement('span');
+                rbadge.className = 'pl-map-emotion__replies-badge';
+                markerEl.appendChild(rbadge);
+            }
+            rbadge.textContent = '💬 ' + rn;
+            rbadge.style.display = '';
+        } else if (rbadge) {
+            rbadge.style.display = 'none';
+        }
+    }
+
+    function refreshRepliesCountUI(em) {
+        var markerEl = findEmotionEl(em.id);
+        if (markerEl) applyEmotionSize(markerEl, em);
+        if (emotionPopEl && emotionOpenId === em.id) {
+            var pill = emotionPopEl.querySelector('.pl-map-emotion-pop__replies-count');
+            if (pill) {
+                var cntBtn = pill.querySelector('span');
+                if (cntBtn) cntBtn.textContent = emotionRepliesCount(em);
+                pill.classList.toggle('has-replies', emotionRepliesCount(em) > 0);
+            }
         }
     }
 
@@ -1338,11 +1386,55 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 toggleEmotionLike(pop.__em, likeBtn);
                 return;
             }
+            var repliesBtn = t.closest ? t.closest('.pl-map-emotion-pop__replies-count') : null;
+            if (repliesBtn) {
+                var box0 = pop.querySelector('[data-replies]');
+                if (box0 && box0.scrollIntoView) { try { box0.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (err) {} }
+                var inp0 = pop.querySelector('.pl-map-reply__input');
+                if (inp0) { try { inp0.focus({ preventScroll: true }); } catch (err2) { try { inp0.focus(); } catch (err3) {} } }
+                return;
+            }
             if (t.classList.contains('pl-map-balloon__close')) hideEmotionPop();
             else if (t.classList.contains('pl-map-emotion-pop__delete')) {
 
                 hideEmotionPop();
                 if (pop.__em) deleteEmotion(pop.__em);
+                return;
+            }
+            var novkBtn = t.closest ? t.closest('[data-reply-novk]') : null;
+            if (novkBtn) {
+                showToast('Привяжите VK-аккаунт на сайте permlive.ru, чтобы писать комментарии');
+                return;
+            }
+            var sendBtn = t.closest ? t.closest('[data-reply-send]') : null;
+            if (sendBtn) { sendEmotionReply(pop); return; }
+            var editBtn = t.closest ? t.closest('[data-reply-edit]') : null;
+            if (editBtn) {
+                startReplyEdit(pop, editBtn.getAttribute('data-reply-edit'));
+                return;
+            }
+            var saveBtn = t.closest ? t.closest('[data-reply-save]') : null;
+            if (saveBtn) {
+                saveReplyEdit(pop, saveBtn.getAttribute('data-reply-save'));
+                return;
+            }
+            var cancelBtn = t.closest ? t.closest('[data-reply-cancel]') : null;
+            if (cancelBtn) { renderEmotionReplies(pop.__em); return; }
+            var delBtn2 = t.closest ? t.closest('[data-reply-del]') : null;
+            if (delBtn2) {
+                deleteEmotionReply(pop, delBtn2.getAttribute('data-reply-del'));
+                return;
+            }
+        });
+        pop.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                var inp = e.target && e.target.classList && e.target.classList.contains('pl-map-reply__input') ? e.target : null;
+                if (inp) { e.preventDefault(); sendEmotionReply(pop); }
+                var editInp = e.target && e.target.classList && e.target.classList.contains('pl-map-reply__edit-input') ? e.target : null;
+                if (editInp) {
+                    e.preventDefault();
+                    saveReplyEdit(pop, editInp.getAttribute('data-edit-id'));
+                }
             }
         });
         state.mapEl.appendChild(pop);
@@ -1363,6 +1455,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 userHtml = '<a class="pl-map-emotion-pop__user pl-map-emotion-pop__user-link" href="https://vk.com/id' + encodeURIComponent(vku) + '" target="_blank" rel="noopener">' + escapeHtml(em.user || 'Пользователь') + '</a>';
             }
         }catch(e){}
+        var likesN = emotionLikesCount(em);
+        var repliesN = emotionRepliesCount(em);
+        var repliesCls = repliesN > 0 ? ' has-replies' : '';
+        var formHtml = vkHasAccount()
+            ? '<div class="pl-map-reply__form"><input type="text" class="pl-map-reply__input" maxlength="120" placeholder="Ответить…" autocomplete="off">' +
+              '<button type="button" class="pl-map-reply__send" data-reply-send aria-label="Отправить">↑</button></div>'
+            : '<button type="button" class="pl-map-reply__login" data-reply-novk>Привяжите VK на сайте, чтобы ответить</button>';
         emotionPopEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
             '<div class="pl-map-emotion-pop__top">' +
@@ -1375,13 +1474,196 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<div class="pl-map-emotion-pop__actions">' +
             '<button type="button" class="pl-map-emotion-pop__like' + (em.liked ? ' is-liked' : '') + '" aria-label="Поставить лайк">' +
             '<i class="fa-solid fa-heart" aria-hidden="true"></i>' +
-            '<span class="pl-map-emotion-pop__like-count">' + emotionLikesCount(em) + '</span></button>' +
+            '<span class="pl-map-emotion-pop__like-count">' + likesN + '</span></button>' +
+            '<button type="button" class="pl-map-emotion-pop__replies-count' + repliesCls + '" title="Ответы" aria-label="Ответы">' +
+            '<i class="fa-solid fa-comment" aria-hidden="true"></i> <span>' + repliesN + '</span></button>' +
             '</div>' +
+            '<div class="pl-map-replies" data-replies><p class="pl-map-replies__loading">Загружаем ответы…</p></div>' +
+            formHtml +
             delBtn;
         emotionPopEl.classList.add('pl-map-balloon--open');
         attachSwipeClose(emotionPopEl, hideEmotionPop);
         positionEmotionPop(markerEl);
         emotionOpenId = em.id;
+        fetchEmotionReplies(em);
+    }
+
+    function replyAvatarHtml(r) {
+        if (r.avatar) return '<img class="pl-map-reply__avatar-img" src="' + escapeAttr(r.avatar) + '" alt="" loading="lazy">';
+        return '<span class="pl-map-reply__avatar-letter">' + escapeHtml(String(r.user || '?').charAt(0).toUpperCase()) + '</span>';
+    }
+
+    function renderEmotionReplies(em) {
+        if (!emotionPopEl || emotionOpenId !== em.id) return;
+        var box = emotionPopEl.querySelector('[data-replies]');
+        if (!box) return;
+        var list = em.replies || [];
+        if (!list.length) {
+            box.innerHTML = '<p class="pl-map-replies__empty">Пока нет ответов — станьте первым</p>';
+            return;
+        }
+        box.innerHTML = list.map(function (r) {
+            var mine = r.is_mine ? ' pl-map-reply--mine' : '';
+            var edited = r.is_edited ? '<span class="pl-map-reply__edited"> · изм.</span>' : '';
+            var tools = r.can_edit
+                ? '<span class="pl-map-reply__tools"><button type="button" data-reply-edit="' + r.id + '" title="Редактировать" aria-label="Редактировать">✎</button>' +
+                  '<button type="button" data-reply-del="' + r.id + '" title="Удалить" aria-label="Удалить">🗑</button></span>'
+                : '';
+            if (r._editing) {
+                return '<div class="pl-map-reply' + mine + '" data-reply="' + r.id + '">' +
+                    '<div class="pl-map-reply__avatar">' + replyAvatarHtml(r) + '</div>' +
+                    '<div class="pl-map-reply__body"><input type="text" class="pl-map-reply__edit-input" data-edit-id="' + r.id + '" maxlength="120" value="' + escapeAttr(r.text) + '">' +
+                    '<span class="pl-map-reply__edit-btns"><button type="button" data-reply-save="' + r.id + '">Сохранить</button>' +
+                    '<button type="button" data-reply-cancel>Отмена</button></span></div></div>';
+            }
+            return '<div class="pl-map-reply' + mine + '" data-reply="' + r.id + '">' +
+                '<div class="pl-map-reply__avatar">' + replyAvatarHtml(r) + '</div>' +
+                '<div class="pl-map-reply__body"><div class="pl-map-reply__head"><span class="pl-map-reply__user">' + escapeHtml(r.user || 'Пользователь') + '</span>' + tools + '</div>' +
+                '<p class="pl-map-reply__text">' + escapeHtml(r.text) + '</p>' +
+                '<span class="pl-map-reply__meta">' + relativeTime(r.created_at) + edited + '</span></div></div>';
+        }).join('');
+        try { box.scrollTop = box.scrollHeight; } catch (e) {}
+    }
+
+    function vkRepliesUrl(em, afterId) {
+        var url = '/api/vk/emotion/' + String(em.id) + '/replies/';
+        var v = vkCtx();
+        var qs = [];
+        if (v && v.vk_user_id) qs.push('vk_user_id=' + encodeURIComponent(v.vk_user_id));
+        if (afterId) qs.push('after_id=' + encodeURIComponent(afterId));
+        if (qs.length) url += '?' + qs.join('&');
+        return url;
+    }
+
+    function fetchEmotionReplies(em) {
+        fetch(vkRepliesUrl(em, 0), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
+        }).then(function (res) {
+            if (!res.ok || !res.d) return;
+            if (emotionOpenId !== em.id) return;
+            em.replies = res.d.replies || [];
+            em.replies_count = (typeof res.d.replies_count !== 'undefined') ? res.d.replies_count : em.replies.length;
+            renderEmotionReplies(em);
+            refreshRepliesCountUI(em);
+        }).catch(function () {
+            if (!emotionPopEl || emotionOpenId !== em.id) return;
+            var box = emotionPopEl.querySelector('[data-replies]');
+            if (box) box.innerHTML = '<p class="pl-map-replies__empty">Не удалось загрузить ответы</p>';
+        });
+    }
+
+    function sendEmotionReply(pop) {
+        var em = pop.__em;
+        if (!em) return;
+        var v = vkCtx();
+        if (!v || !v.vk_user_id || !vkHasAccount()) {
+            showToast('Привяжите VK-аккаунт на сайте permlive.ru, чтобы писать комментарии');
+            return;
+        }
+        var input = pop.querySelector('.pl-map-reply__input');
+        var sendBtn = pop.querySelector('[data-reply-send]');
+        var text = input ? input.value.trim().slice(0, 120) : '';
+        if (!text) { if (input) input.focus(); return; }
+        if (sendBtn) sendBtn.disabled = true;
+        var body = vkReplyPayloadExtra();
+        body.text = text;
+        fetch('/api/vk/emotion/' + String(em.id) + '/replies/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                showToast((res.d && res.d.error) || 'Не удалось отправить');
+                return;
+            }
+            em.replies = (em.replies || []).concat([res.d]);
+            em.replies_count = (typeof res.d.replies_count !== 'undefined') ? res.d.replies_count : em.replies.length;
+            if (input) input.value = '';
+            renderEmotionReplies(em);
+            refreshRepliesCountUI(em);
+        }).catch(function () {
+            showToast('Сеть недоступна, попробуйте ещё раз');
+        }).then(function () {
+            if (sendBtn) sendBtn.disabled = false;
+        });
+    }
+
+    function startReplyEdit(pop, replyId) {
+        var em = pop.__em;
+        if (!em || !em.replies) return;
+        for (var i = 0; i < em.replies.length; i++) em.replies[i]._editing = String(em.replies[i].id) === String(replyId);
+        renderEmotionReplies(em);
+        var inp = pop.querySelector('.pl-map-reply__edit-input');
+        if (inp) { try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { try { inp.focus(); } catch (e2) {} } }
+    }
+
+    function saveReplyEdit(pop, replyId) {
+        var em = pop.__em;
+        if (!em) return;
+        var v = vkCtx();
+        if (!v || !v.vk_user_id || !vkHasAccount()) {
+            showToast('Привяжите VK-аккаунт на сайте permlive.ru');
+            return;
+        }
+        var inp = pop.querySelector('.pl-map-reply__edit-input[data-edit-id="' + String(replyId).replace(/"/g, '') + '"]');
+        var text = inp ? inp.value.trim().slice(0, 120) : '';
+        if (!text) { showToast('Напишите ответ'); return; }
+        var body = vkReplyPayloadExtra();
+        body.text = text;
+        fetch('/api/vk/emotion-replies/' + String(replyId) + '/', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                showToast((res.d && res.d.error) || 'Не удалось сохранить');
+                return;
+            }
+            for (var i = 0; i < em.replies.length; i++) {
+                if (String(em.replies[i].id) === String(replyId)) { em.replies[i] = res.d; break; }
+            }
+            if (typeof res.d.replies_count !== 'undefined') em.replies_count = res.d.replies_count;
+            renderEmotionReplies(em);
+            refreshRepliesCountUI(em);
+        }).catch(function () {
+            showToast('Сеть недоступна, попробуйте ещё раз');
+        });
+    }
+
+    function deleteEmotionReply(pop, replyId) {
+        var em = pop.__em;
+        if (!em) return;
+        var v = vkCtx();
+        if (!v || !v.vk_user_id || !vkHasAccount()) {
+            showToast('Привяжите VK-аккаунт на сайте permlive.ru');
+            return;
+        }
+        fetch('/api/vk/emotion-replies/' + String(replyId) + '/', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(vkReplyPayloadExtra())
+        }).then(function (r) {
+            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                showToast((res.d && res.d.error) || 'Не удалось удалить');
+                return;
+            }
+            em.replies = (em.replies || []).filter(function (x) { return String(x.id) !== String(replyId); });
+            if (typeof res.d.replies_count !== 'undefined') em.replies_count = res.d.replies_count;
+            else em.replies_count = em.replies.length;
+            renderEmotionReplies(em);
+            refreshRepliesCountUI(em);
+            showToast('Ответ удалён');
+        }).catch(function () {
+            showToast('Сеть недоступна, попробуйте ещё раз');
+        });
     }
 
     function refreshEmotionLikeUI(em) {
