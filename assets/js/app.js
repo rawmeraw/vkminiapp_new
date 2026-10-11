@@ -1656,6 +1656,19 @@ function openSheet(c){
     </div>`;
   els.sheet.classList.add('sheet--open');
   els.sheetOverlay.classList.add('sheet-overlay--show');
+  // Просмотр для кабинета оплаченных: fire-and-forget, ошибки молча.
+  try{
+    if(c.id){
+      const payload={concert_id: Number(c.id)};
+      if(state.vkUserId) payload.vk_user_id=state.vkUserId;
+      if(state.vkParams) payload.vk_params=state.vkParams;
+      fetch(API_BASE+'/api/vk/view/', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+        body: JSON.stringify(payload)
+      }).catch(()=>{});
+    }
+  }catch(e){}
   $('#sheet-map-btn').onclick=()=>{
     closeSheet();
     switchTab('map');
