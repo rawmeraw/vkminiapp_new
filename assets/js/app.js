@@ -1635,6 +1635,22 @@ function openTimeline(type){
 }
 
 // Sheet
+function pingMiniView(concertId){
+  // Просмотр для кабинета оплаченных: явный concert_id (URL мини-аппа всегда
+  // один — https://vk.ru/app..., по нему концерт не отличить). Fire-and-forget.
+  try{
+    concertId = Number(concertId);
+    if(!concertId) return;
+    const payload={concert_id: concertId};
+    if(state.vkUserId) payload.vk_user_id=state.vkUserId;
+    if(state.vkParams) payload.vk_params=state.vkParams;
+    fetch(API_BASE+'/api/vk/view/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
+      body: JSON.stringify(payload)
+    }).catch(()=>{});
+  }catch(e){}
+}
 function openSheet(c){
   const slug=c.slug||extractSlug(c.url||'');
   const sheetHeart = state.hasAccount
@@ -1656,19 +1672,7 @@ function openSheet(c){
     </div>`;
   els.sheet.classList.add('sheet--open');
   els.sheetOverlay.classList.add('sheet-overlay--show');
-  // Просмотр для кабинета оплаченных: fire-and-forget, ошибки молча.
-  try{
-    if(c.id){
-      const payload={concert_id: Number(c.id)};
-      if(state.vkUserId) payload.vk_user_id=state.vkUserId;
-      if(state.vkParams) payload.vk_params=state.vkParams;
-      fetch(API_BASE+'/api/vk/view/', {
-        method:'POST',
-        headers:{'Content-Type':'application/json', 'X-Requested-With':'XMLHttpRequest'},
-        body: JSON.stringify(payload)
-      }).catch(()=>{});
-    }
-  }catch(e){}
+  pingMiniView(c.id);
   $('#sheet-map-btn').onclick=()=>{
     closeSheet();
     switchTab('map');
@@ -1764,6 +1768,7 @@ async function openDetail(slug, push=true){
   if(state.detailSlug!==slug) return; // ушли дальше
   if(full) renderDetail(full, true);
   else if(!cached) els.detailContent.innerHTML = `<button class="detail__back" id="detail-back"><i class="fa-solid fa-arrow-left"></i> Назад</button><div class="detail__skeleton">Не удалось загрузить концерт.<br><a href="${esc(siteEventUrl(slug))}" target="_blank" rel="noopener">Открыть на сайте</a></div>`;
+  pingMiniView((full && full.id) || (cached && cached.id));
   wireDetailBack();
 }
 function closeDetail(push=true){
