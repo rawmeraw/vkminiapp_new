@@ -1182,8 +1182,8 @@ a.pl-map-balloon__venue-name:hover {
     transform: scale(1.05);
 }
 
-.pl-map-filter-btn--hard.is-active { background: #f97316; }
-.pl-map-filter-btn--academic.is-active { background: #9a9a2e; }
+.pl-map-filter-btn--hard.is-active { background: #f05a15; }
+.pl-map-filter-btn--academic.is-active { background: #86992c; }
 .pl-map-filter-btn--pop.is-active { background: #06b6d4; }
 
 .pl-map-filter-btn:not(.is-active) {
