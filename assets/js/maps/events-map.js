@@ -40,23 +40,21 @@
         syktyvkar: [50.8358, 61.6687]
     };
 
-    // Цвета типов событий: music — Музыка (красный), stage — Кино и сцена
-    // (синий), talk — Юмор и игры (оранжевый), expo — Выставки и знания
-    // (шалфей), other — Прочее (серый). Paid — золото, эмоции — фиолетовый.
+    // Цвета типов событий: hard — Рок и тяжёлое (оранжевый),
+    // academic — Акустика и классика (олива), pop — Поп и электроника
+    // (электрик-синий), other — Прочее (серый). Эмоции — фиолетовый.
     var GENRE_COLORS = {
-        'music': '#e14425',
-        'stage': '#2f6fed',
-        'talk': '#eab308',
-        'expo': '#7d8c6f',
+        'hard': '#f97316',
+        'academic': '#9a9a2e',
+        'pop': '#06b6d4',
         'other': '#94a3b8'
     };
 
     // Подписи для легенды карты (порядок = порядок строк).
     var GENRE_LABELS = {
-        'music': 'Музыка',
-        'stage': 'Кино и сцена',
-        'talk': 'Юмор и игры',
-        'expo': 'Выставки и знания',
+        'hard': 'Рок и тяжёлое',
+        'academic': 'Акустика и классика',
+        'pop': 'Поп и электроника',
         'other': 'Прочее'
     };
 
@@ -69,8 +67,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var pressedEl = null;
     var pressedXY = null;
 
-    var FILTER_KEY = 'pl_map_filters_v2';
-    var FILTER_TYPES = ['music', 'stage', 'talk', 'expo'];
+    var FILTER_KEY = 'pl_map_filters_v3';
+    var FILTER_TYPES = ['hard', 'academic', 'pop'];
     var MODE_KEY = 'pl_map_mode_v1';
 
     var state = {
@@ -92,7 +90,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
         emotions: [],
         emotionsVisible: true,
-        filters: { music: true, stage: true, talk: true, expo: true },
+        filters: { hard: true, academic: true, pop: true },
         modeFilter: 'all',
         filterBtns: {},
         emotionPanels: [],
@@ -215,7 +213,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function getTypeAvailability() {
-        var cnt = { music: 0, stage: 0, talk: 0, expo: 0 };
+        var cnt = { hard: 0, academic: 0, pop: 0 };
         for (var i = 0; i < state.events.length; i++) {
             var t = primaryType(state.events[i]);
             if (cnt.hasOwnProperty(t)) cnt[t]++;
@@ -2756,10 +2754,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         controls.appendChild(fsBtn);
 
         var filterDefs = [
-            { key: 'music', label: 'Музыка', cls: 'pl-map-filter-btn--music', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
-            { key: 'stage', label: 'Кино и сцена', cls: 'pl-map-filter-btn--stage', icon: '<i class="fas fa-clapperboard" aria-hidden="true"></i>' },
-            { key: 'talk', label: 'Юмор и игры', cls: 'pl-map-filter-btn--talk', icon: '<i class="fas fa-microphone" aria-hidden="true"></i>' },
-            { key: 'expo', label: 'Выставки и знания', cls: 'pl-map-filter-btn--expo', icon: '<i class="fas fa-landmark" aria-hidden="true"></i>' }
+            { key: 'hard', label: 'Рок и тяжёлое', cls: 'pl-map-filter-btn--hard', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
+            { key: 'academic', label: 'Акустика и классика', cls: 'pl-map-filter-btn--academic', icon: '<i class="fas fa-feather" aria-hidden="true"></i>' },
+            { key: 'pop', label: 'Поп и электроника', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-compact-disc" aria-hidden="true"></i>' }
         ];
         for (var fi = 0; fi < filterDefs.length; fi++) {
             (function (def) {

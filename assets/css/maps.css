@@ -743,10 +743,9 @@ body.pl-map-fs #map {
     white-space: nowrap;
 }
 
-.pl-map-balloon__tag[data-type="music"] { background: hsla(0, 80%, 90%, 0.7); color: #a03118; }
-.pl-map-balloon__tag[data-type="stage"] { background: hsla(230, 80%, 91%, 0.7); color: #2b4bb8; }
-.pl-map-balloon__tag[data-type="talk"] { background: hsla(48, 95%, 89%, 0.7); color: #713f12; }
-.pl-map-balloon__tag[data-type="expo"] { background: hsla(90, 15%, 88%, 0.7); color: #4d5a45; }
+.pl-map-balloon__tag[data-type="hard"] { background: hsla(24, 90%, 89%, 0.7); color: #a04a10; }
+.pl-map-balloon__tag[data-type="academic"] { background: hsla(68, 45%, 91%, 0.7); color: #6a670f; }
+.pl-map-balloon__tag[data-type="pop"] { background: hsla(190, 72%, 90%, 0.7); color: #0a5d6d; }
 .pl-map-balloon__tag[data-type="other"] { background: hsla(215, 10%, 88%, 0.7); color: #555; }
 
 .pl-map-balloon__place {
@@ -1183,10 +1182,9 @@ a.pl-map-balloon__venue-name:hover {
     transform: scale(1.05);
 }
 
-.pl-map-filter-btn--music.is-active { background: #e14425; }
-.pl-map-filter-btn--stage.is-active { background: #2f6fed; }
-.pl-map-filter-btn--talk.is-active { background: #eab308; }
-.pl-map-filter-btn--expo.is-active { background: #7d8c6f; }
+.pl-map-filter-btn--hard.is-active { background: #f97316; }
+.pl-map-filter-btn--academic.is-active { background: #9a9a2e; }
+.pl-map-filter-btn--pop.is-active { background: #06b6d4; }
 
 .pl-map-filter-btn:not(.is-active) {
     background: rgba(255, 255, 255, 0.92);
