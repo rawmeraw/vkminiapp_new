@@ -1684,9 +1684,10 @@ function closeSheet(){ els.sheet.classList.remove('sheet--open'); els.sheetOverl
 
 // ---------- Detail page ----------
 // Порт темплейттегов enhanced_urlize + vk_urlize (extras.py) для описаний:
-// http(s)-ссылки, голые домены и вся VK-разметка [id123|Имя], [club123|...],
-// [https://vk.com/...|...], [wall-123_456|...]. vk.com и vk.ru — одно и то же,
-// нормализуем к https://vk.com/. VK-разметку обрабатываем первой, пока сырая.
+// http(s)-ссылки, голые домены, почта (mailto) и вся VK-разметка [id123|Имя],
+// [club123|...], [https://vk.com/...|...], [wall-123_456|...],
+// [https://site.ru/...|...]. vk.com и vk.ru — одно и то же, нормализуем
+// к https://vk.com/. VK-разметку обрабатываем первой, пока сырая.
 function linkify(s){
   // Как normalize_vk_text на сервере: схлопываем CRLF, иначе в HTML остаются stray \r.
   s = String(s||'').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -1703,6 +1704,22 @@ function linkify(s){
   t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/(wall-?\d+_\d+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
   t = t.replace(/\[https?:\/\/vk\.(?:com|ru)\/([^|\]]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
   t = t.replace(/\[(event|club|id|public)(\d+?)\|(.+?)\]/g, '<a href="https://vk.com/$1$2" target="_blank" rel="noopener">$3</a>');
+  // Свободная ссылка на любой адрес: [https://site.ru/asadsasd|название].
+  // После всех vk-паттернов, иначе ссылка на ВК уехала бы в общий разбор.
+  // Схема в href ограничена http/https/mailto/www — иначе проскочило бы
+  // [javascript:alert(1)|клик].
+  t = t.replace(/\[\s*((?:https?:\/\/|mailto:|www\.)[^|\]\s<>"'`]+)\s*\|\s*([^|\]\[]+?)\s*\]/g,
+    function(m, target, label){
+      if (/^www\./i.test(target)) target = 'https://' + target;
+      return `<a href="${target}" target="_blank" rel="noopener">${label}</a>`;
+    });
+  // То же без протокола: [site.ru/asadsasd|название]. Перед catch-all ниже,
+  // иначе он собрал бы vk.com/site.ru.
+  t = t.replace(/\[\s*((?:www\.)?[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.[a-zA-Z]{2,}(?:\/[^|\]\s<>"'`]*)?)\s*\|\s*([^|\]\[]+?)\s*\]/g,
+    function(m, target, label){
+      if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+      return `<a href="${target}" target="_blank" rel="noopener">${label}</a>`;
+    });
   t = t.replace(/\[([a-zA-Z0-9_.]+)\|(.+?)\]/g, '<a href="https://vk.com/$1" target="_blank" rel="noopener">$2</a>');
   // enhanced_urlize: готовые <a> прячем в плейсхолдеры, как на сайте
   const held = [];
@@ -1713,6 +1730,17 @@ function linkify(s){
   });
   // только что созданные <a> тоже прячем перед поиском голых доменов
   t = t.replace(/<a\s[^>]*>.*?<\/a>/gi, function(m){ held.push(m); return `\u0000${held.length-1}\u0000`; });
+  // Почта в mailto: — до голых доменов, иначе в sales@rhymesmusic.ru домен
+  // стал бы ссылкой, а «sales@» остался бы чёрным.
+  // Перед адресом запрещены символы локальной части и слэш, иначе из
+  // «site.ru/mail@x.ru» получился бы обрывок «ail@x.ru». Это группа-префикс,
+  // а не lookbehind: lookbehind в регулярках есть не во всех WebView.
+  t = t.replace(/(^|[^a-zA-Z0-9._%+\-/])((?:mailto:)?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,})/gi,
+    function(m, pre, address){
+      const shown = address.replace(/^mailto:/i, '');
+      held.push(`<a href="mailto:${shown}" target="_blank" rel="noopener">${shown}</a>`);
+      return pre + `\u0000${held.length-1}\u0000`;
+    });
   // голые домены (не глотаем | и ] из VK-разметки)
   t = t.replace(/\b[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.[a-zA-Z]{2,}(?:\/[^\s<>"'|\[\]]*)?/g, '<a href="https://$&" target="_blank" rel="noopener">$&</a>');
   t = t.replace(/\u0000(\d+)\u0000/g, function(m, i){ return held[+i]; });
