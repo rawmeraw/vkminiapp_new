@@ -1826,11 +1826,12 @@ function ticketVendor(url){
 }
 function ticketBtnHTML(tickets, price, vendor){
   // vendor — ticket_vendor с сервера (уже с учётом ShortLink); фолбэк — локальное определение.
+  // Цена живёт в крошке деталки, кнопка — только доступность + бренд оператора.
   const v = vendor || ticketVendor(tickets);
-  const priceSuffix = price===0 ? ' — Бесплатно' : (price ? ` от ${price}₽` : '');
-  if(v==='yandex') return `<a class="detail-ticket detail-ticket--yandex" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/yandex_afisha.svg" alt="Яндекс.Афиша"><span>Купить на Яндекс.Афише${price>0? ` от ${price}₽`:''}</span></a>`;
-  if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Купить на МТС Live${price>0? ` от ${price}₽`:''}</span></a>`;
-  if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Купить на Ticketland${price>0? ` от ${price}₽`:''}</span></a>`;
+  const priceSuffix = price===0 ? ' — Бесплатно' : '';
+  if(v==='yandex') return `<a class="detail-ticket detail-ticket--yandex" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/yandex_afisha.svg" alt="Яндекс.Афиша"><span>Есть билеты на Яндекс.Афише</span></a>`;
+  if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Есть билеты на МТС Live</span></a>`;
+  if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Есть билеты на Ticketland</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
 function yandexPromosHTML(c){
@@ -1920,8 +1921,8 @@ function renderDetail(c, isFull){
   const coords = c.place?.coordinates || '';
   const routeHref = coords ? `https://yandex.ru/maps/?rtext=~${esc(coords)}` : '';
   const tickets = c.tickets || '';
-  // цену в строке инфо показываем только когда нет ссылки на билеты (иначе она в кнопке)
-  const pricePart = !tickets ? (c.price===0 ? ' › Бесплатно' : (c.price ? ` › ${c.price}₽` : '')) : '';
+  // Цену показываем в крошке всегда (как у Яндекс.Афиши) — кнопка больше цену не дублирует.
+  const pricePart = c.price===0 ? ' › Бесплатно' : (c.price ? ` › от ${c.price}₽` : '');
   const infoStr = [datePart||'Дата уточняется', venuePart||''].filter(Boolean).join(' › ') + pricePart;
   const srcLink = c.link || '';
   const bands = (c.bands||[]).filter(b=>b && b.name);
