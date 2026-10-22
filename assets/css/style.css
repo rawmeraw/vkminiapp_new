@@ -262,7 +262,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
   .schedule-details{max-width:100%;white-space:normal}
 }
 /* Начавшиеся концерты (старт + 15 мин) гаснут — как на сайте */
-.schedule-event.started{opacity:.45}
+.schedule-event.started{opacity:.55}
 
 /* Пилюли-переключатели как на сайте (Сейчас/Выходные/Вся афиша/Для вас) */
 .tl-pills{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px}
@@ -276,14 +276,15 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .tl-pill:active{filter:brightness(.96)}
 @media(min-width:769px){.tl-pill{padding:9px 14px;font-size:14px;border-radius:15px}}
 
-/* Бегунок «сейчас» в блоке «Сегодня» — позицию ведёт JS; виден всегда,
-   до первого старта прижат к верхней границе первой строки */
+/* «Якорь на сейчас» (scrollTimelineToNow): без бегущей полоски.
+   Прошедшие 2 дня (отмотка) — приглушённые, у прошедших с отзывами — чип */
 .schedule-day-events{position:relative}
-#concert-container .tl-now{position:absolute;left:0;right:0;height:0;top:50%;pointer-events:none;z-index:3;transition:top 20s linear}
-#concert-container .tl-now__line{position:absolute;left:0;right:0;top:-1px;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(225,68,37,.9) 0%,rgba(225,68,37,.6) 20%,rgba(225,68,37,.45) 45%,rgba(225,68,37,.28) 70%,rgba(225,68,37,.1) 92%,transparent 100%)}
-#concert-container .tl-now__dot{position:absolute;left:22px;top:-5px;width:10px;height:10px;border-radius:50%;background:#e14425;box-shadow:0 0 0 3px rgba(225,68,37,.18);animation:tl-now-pulse 3s ease-in-out infinite}
-@keyframes tl-now-pulse{0%,100%{box-shadow:0 0 0 3px rgba(225,68,37,.25)}50%{box-shadow:0 0 0 8px rgba(225,68,37,.08)}}
-@media (prefers-reduced-motion: reduce){#concert-container .tl-now{transition:none}#concert-container .tl-now__dot{animation:none}}
+#concert-container .schedule-event{scroll-margin-top:calc(var(--header-h) + 26px)}
+#concert-container .schedule-day--past{opacity:.85}
+#concert-container .schedule-day-title--past{color:#777;font-weight:500}
+#concert-container .schedule-event.is-past{opacity:.55}
+#concert-container .chip-reviews{background:#fdeeee;color:#e14425!important}
+#concert-container .chip-reviews i{color:#e14425}
 /* Grid on desktop for timeline cards (mirror index slider) */
 @media(min-width:769px){
   #concert-container.timeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}

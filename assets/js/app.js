@@ -116,14 +116,28 @@ function fmtDay(d){ const m=['января','февраля','марта','ап�
 function fmtWeekday(d){ const w=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']; return w[d.getDay()]; }
 function fmtHeaderDate(d){ const today=parseISO(state.todayISO); if(toISO(d)===state.todayISO) return 'Сегодня'; const tmr=new Date(today); tmr.setDate(today.getDate()+1); if(toISO(d)===toISO(tmr)) return 'Завтра'; return `${fmtWeekday(d)}, ${fmtDay(d)}`; }
 function fmtDateShort(iso){ const d=parseISO(iso); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`; }
+function relDayLabel(iso){
+  if (iso === state.todayISO) return '';
+  const today = parseISO(state.todayISO), d = parseISO(iso);
+  const diff = Math.round((today - d)/86400000);
+  if (diff===1) return 'Вчера';
+  if (diff===2) return 'Позавчера';
+  return '';
+}
+function pluralReviewsRu(n){
+  n = Number(n)||0; const m10=n%10, m100=n%100;
+  if (m10===1 && m100!==11) return 'отзыв';
+  if (m10>=2 && m10<=4 && (m100<10 || m100>=20)) return 'отзыва';
+  return 'отзывов';
+}
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 
-/* «Сейчас» на таймлайне мини-аппа: начавшиеся гаснут (старт + 15 мин),
-   полоска времени скользит между строками. Часы — пояса выбранного города
-   (Intl), а не устройства пользователя. Логика — как timeline-runner.js. */
+/* «Сейчас» на таймлайне мини-аппа: начавшиеся гаснут (старт + 15 мин).
+   Позиция бегунка не ведётся — таймлайн якорится скроллом при открытии
+   (scrollTimelineToNow), прошедшие 2 дня листаются вверх от якоря.
+   Часы — пояса выбранного города (Intl), а не устройства. */
 const TL_GRACE_MIN = 15;
-const TL_TAIL_MIN = 90;
-const TL_TICK_MS = 20000;
+const TL_TICK_MS = 60000;
 const TZ_FMT_CACHE = {};
 function cityMinutesNow(){
   try{
@@ -158,72 +172,52 @@ function ensureTimelineTicker(){
   timelineTicker = setInterval(() => {
     try {
       if (!els.timelineWrap || els.timelineWrap.style.display === 'none') return;
-      updateTimelineNow(false);
+      updateTimelineNow();
     } catch (e) {}
   }, TL_TICK_MS);
 }
-function updateTimelineNow(instant){
+function updateTimelineNow(){
+  /* Без бегущей полоски: только тогглинг started (старт + 15 мин) —
+     таймлайн «якорится» скроллом при открытии (scrollTimelineToNow). */
   const nowMin = cityMinutesNow();
   if (nowMin === null) return;
   const today = cityTodayISO(state.city);
-  const days = document.querySelectorAll('#concert-container .schedule-day');
-  days.forEach(day => {
-    const dayDate = day.getAttribute('data-date');
+  document.querySelectorAll('#concert-container .schedule-day').forEach(day => {
+    if (day.getAttribute('data-date') !== today) return;
     const events = day.querySelector('.schedule-day-events');
     if (!events) return;
-    const rows = Array.from(events.querySelectorAll('.schedule-event'));
-    const items = [];
-    rows.forEach(r => {
+    Array.from(events.querySelectorAll('.schedule-event')).forEach(r => {
       const t = startMinutes(r.dataset.time);
       if (t === null) return;
-      items.push({ row: r, t: t });
-      r.classList.toggle('started', dayDate === today && nowMin >= t + TL_GRACE_MIN);
+      r.classList.toggle('started', nowMin >= t + TL_GRACE_MIN);
     });
-    let line = events.querySelector(':scope > .tl-now'); // переиспользуем при перерендере
-    if (dayDate !== today || !items.length) {
-      if (line) line.remove();
-      return;
-    }
-    if (!line) {
-      line = document.createElement('div'); line.className = 'tl-now'; line.setAttribute('aria-hidden','true');
-      line.innerHTML = '<span class="tl-now__line"></span><span class="tl-now__dot"></span>';
-      events.appendChild(line);
-    }
-    const boxRect = events.getBoundingClientRect();
-    const tops = items.map(it => { const b = it.row.getBoundingClientRect(); return b.top + b.height / 2 - boxRect.top; });
-    const last = items.length - 1;
-    if (nowMin >= items[last].t + TL_TAIL_MIN) { line.remove(); return; }
-    let top;
-    if (nowMin < items[0].t) {
-      // до первого старта — прижимаем к верхней границе первой строки (бегунок всегда виден)
-      const firstRect = items[0].row.getBoundingClientRect();
-      top = tops[0] - firstRect.height / 2;
-    } else {
-      top = null;
-      for (let n = 0; n < last; n++) {
-        if (nowMin < items[n + 1].t) {
-          const span = items[n + 1].t - items[n].t;
-          const frac = span > 0 ? (nowMin - items[n].t) / span : 0.5;
-          top = tops[n] + frac * (tops[n + 1] - tops[n]);
-          break;
-        }
-      }
-      if (top === null) {
-        const tail = Math.max(0, Math.min(1, (nowMin - items[last].t) / TL_TAIL_MIN));
-        top = tops[last] + tail * (boxRect.height - tops[last]);
-      }
-    }
-    top = Math.max(14, Math.min(boxRect.height - 14, top));
-    if (instant) {
-      line.style.transition = 'none';
-      line.style.top = top + 'px';
-      void line.offsetHeight;
-      line.style.transition = '';
-    } else {
-      line.style.transition = 'top ' + (TL_TICK_MS / 1000) + 's linear';
-      line.style.top = top + 'px';
-    }
   });
+}
+
+function scrollTimelineToNow(){
+  /* Якорь на «сейчас»: скроллим к первой будущей строке «Сегодня»
+     (прошедшие 2 дня остаются выше по списку — их листьям вручную). */
+  try{
+    const nowMin = cityMinutesNow();
+    if (nowMin === null) return;
+    let target = null;
+    const day = document.querySelector(`#concert-container .schedule-day[data-date="${state.todayISO}"]`);
+    if (day){
+      const rows = day.querySelectorAll('.schedule-event');
+      for (const r of rows){
+        const t = startMinutes(r.dataset.time);
+        if (t !== null && nowMin < t + TL_GRACE_MIN){ target = r; break; }
+      }
+      if (!target && rows.length) target = rows[0];
+      if (!target) target = day;
+    }
+    if (!target) target = document.querySelector('#concert-container .schedule-day');
+    if (!target) return;
+    let hh = 64;
+    try{ hh = document.querySelector('.pl-header').getBoundingClientRect().height || 64; }catch(e){}
+    const top = target.getBoundingClientRect().top + window.scrollY - (hh + 14);
+    window.scrollTo({top: Math.max(0, top), behavior:'auto'});
+  }catch(e){}
 }
 
 function toast(msg){
@@ -963,13 +957,15 @@ function rebuildPools(){
     }catch(e){ return false; }
   }).sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date));
   state.promoTotal = state.promoPool.length;
-  if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.map(c => c.date));
+  // В календаре отмечаем только будущие даты (прошлые — из пулов отмотки таймлайна)
+  if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.filter(c=>c.date>=state.todayISO).map(c => c.date));
 }
 
 // Полный пул (500) — только для счётчика, таймлайнов и фильтров; идёт фоном после first paint
 async function fillFullPool(seen){
   try{
-    const fullRes = await cachedFetch(ck('pl2_concerts_'), `${API_BASE}/api/concerts/?${cityQuery()}&limit=500&short=1`, 10*60*1000);
+    // past_days=2: отмотка таймлайна — прошедшие 2 дня с отзывами
+    const fullRes = await cachedFetch(ck('pl2_concerts_p2_'), `${API_BASE}/api/concerts/?${cityQuery()}&limit=500&short=1&past_days=2`, 10*60*1000);
     const results = fullRes && Array.isArray(fullRes.results) ? fullRes.results : (Array.isArray(fullRes) ? fullRes : []);
     let added=false;
     for(const c of results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title)){
@@ -1147,6 +1143,7 @@ function normalizeApiConcert(c){
     bg_color: bg, main_image: img, images: c.images||[], price: c.price ?? '',
     ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
+    reviews_count: Number(c.reviews_count||0), reviews_avg: (c.reviews_avg==null?null:parseFloat(c.reviews_avg)),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
     tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
     yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||'',
@@ -1644,6 +1641,14 @@ function renderTimeline(){
   els.timelineEmpty.classList.add('hidden');
   const groups={};
   list.forEach(c=>{ (groups[c.date]||(groups[c.date]=[])).push(c); });
+  // Отмотка: прошедшие 2 дня (приезжают с past_days=2 после fillFullPool) —
+  // группами перед текущими; поиск и подборки (top10/foryou/promo) не размываем
+  if (['date','weekend','upcoming','range'].includes(state.timelineMode)){
+    const pastStart=(()=>{ const d=parseISO(state.todayISO); d.setDate(d.getDate()-2); return toISO(d); })();
+    state.concerts.forEach(c=>{
+      if (c.date>=pastStart && c.date<state.todayISO){ (groups[c.date]||(groups[c.date]=[])).push(c); }
+    });
+  }
   const dates=Object.keys(groups).sort();
   // header with back
   const header=document.createElement('div');
@@ -1654,7 +1659,7 @@ function renderTimeline(){
     state.timelineMode=null;
     applyFilter();
   };
-  // Пилюли-переключатели «как на сайте» + бегунок времени
+  // Пилюли-переключатели «как на сайте»
   const pills=document.createElement('div'); pills.className='tl-pills';
   const today=state.todayISO;
   const pdef=[
@@ -1679,20 +1684,25 @@ function renderTimeline(){
     const d=parseISO(date);
     const dayEl=document.createElement('div'); dayEl.className='schedule-day';
     dayEl.setAttribute('data-date', date);
-    const title=document.createElement('div'); title.className='schedule-day-title';
+    const isPastDay = date < state.todayISO;
+    const title=document.createElement('div'); title.className='schedule-day-title'+(isPastDay?' schedule-day-title--past':'');
     const isToday=date===state.todayISO;
     // без счетчика около даты (per request)
-    title.innerHTML=`<i class="fa-solid fa-calendar"></i> ${isToday? 'Сегодня': fmtHeaderDate(d)}`;
+    title.innerHTML=`<i class="fa-solid fa-calendar"></i> ${isToday? 'Сегодня': (relDayLabel(date) || fmtHeaderDate(d))}`;
     dayEl.appendChild(title);
     const events=document.createElement('div'); events.className='schedule-day-events';
     groups[date].forEach(c=>{
       const slug=c.slug||extractSlug(c.url||'');
-      const row=document.createElement('div'); row.className='schedule-event';
+      const row=document.createElement('div'); row.className='schedule-event'+(isPastDay?' is-past':'');
       const startMin = startMinutes(c.time);
       if (date===state.todayISO && startMin !== null && cityMinutesNow() >= startMin + TL_GRACE_MIN) row.classList.add('started');
       if (c.time) row.dataset.time = c.time;
+      // чип отзывов прошедшего концерта — клик ведёт в шит события (архив на сайте)
+      const chipHtml = (isPastDay && c.reviews_count>0)
+        ? `<span class="rating-badge chip-reviews"><i class="fa-solid fa-star"></i> ${c.reviews_avg!=null? (Math.round(c.reviews_avg*10)/10).toFixed(1):'–'} · ${c.reviews_count} ${pluralReviewsRu(c.reviews_count)}</span>`
+        : '';
       row.innerHTML=`<span class="schedule-time">${esc(c.time||'')}</span>
-        <a class="schedule-title" href="#/event/${esc(slug)}/" data-slug="${esc(slug)}">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fa-solid fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
+        <a class="schedule-title" href="#/event/${esc(slug)}/" data-slug="${esc(slug)}">${esc(c.title)} ${chipHtml} ${parseFloat(c.cached_rating)>=4 && !isPastDay? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fa-solid fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
         <span class="schedule-details">${esc(c.place_name||c.place?.name||'')} ${c.tags?.length? '› '+esc(c.tags[0].name):''} ${c.price===0?'› бесплатно': c.price? `› ${c.price}₽`:''}</span>`;
       events.appendChild(row);
     });
@@ -1700,7 +1710,10 @@ function renderTimeline(){
     els.timeline.appendChild(dayEl);
   });
   ensureTimelineTicker();
-  requestAnimationFrame(()=>updateTimelineNow(true));
+  requestAnimationFrame(()=>{
+    updateTimelineNow();
+    if (state._tlScrollPending){ state._tlScrollPending=false; scrollTimelineToNow(); }
+  });
 }
 
 function getTimelineTitle(){
@@ -1762,15 +1775,11 @@ function applyFilter(){
 
 function openTimeline(type){
   state.timelineMode = type;
+  // Якорь на «сейчас»: после рендера скроллим к первой будущей строке «Сегодня»;
+  // вверх от якоря — начавшиеся и прошедшие 2 дня, вниз — будущие
+  state._tlScrollPending = true;
   applyFilter();
   history.pushState({timeline:type},'',`#timeline-${type}`);
-  // скролл к самому верху таймлайна, а не чуть ниже — без smooth смещения
-  requestAnimationFrame(function(){
-    let hh = 64;
-    try{ hh = document.querySelector('.pl-header').getBoundingClientRect().height || 64; }catch(e){}
-    const top = els.timelineWrap.getBoundingClientRect().top + window.scrollY - hh; // высота хедера с VK-инсетом
-    window.scrollTo({top: Math.max(0, top), behavior:'auto'});
-  });
 }
 
 // Sheet
