@@ -195,23 +195,47 @@ function updateTimelineNow(){
 }
 
 function scrollTimelineToNow(){
-  /* Якорь на «сейчас»: скроллим к первой будущей строке «Сегодня»
-     (прошедшие 2 дня остаются выше по списку — их листьям вручную). */
+  /* Якорь на «сейчас»: скроллим к первой будущей строке «Сегодня».
+     Начавшиеся строки остаются выше, то есть «уезжают вверх»; прошедшие
+     2 дня — ещё выше, их можно долистать вручную. Если сегодня всё
+     стартовало — якорь на следующий день; если блока «сегодня» нет —
+     на первый будущий день, иначе на последний. */
   try{
     const nowMin = cityMinutesNow();
     if (nowMin === null) return;
+    const today = cityTodayISO(state.city);
+    const days = Array.from(document.querySelectorAll('#concert-container .schedule-day[data-date]'));
+    if (!days.length) return;
+    const dayKey = el => el.getAttribute('data-date') || '';
+    const firstRow = el => el.querySelector('.schedule-event');
     let target = null;
-    const day = document.querySelector(`#concert-container .schedule-day[data-date="${state.todayISO}"]`);
-    if (day){
-      const rows = day.querySelectorAll('.schedule-event');
-      for (const r of rows){
+    const todayDay = days.find(el => dayKey(el) === today);
+    const hasPast = days.some(el => dayKey(el) < today);
+    const hasFuture = days.some(el => dayKey(el) > today);
+    /* Автоскролл только там, где есть «сейчас» (или отмотка + будущее).
+       На конкретной будущей/прошлой дате оставляем верх с заголовком. */
+    if (!todayDay && !(hasPast && hasFuture)) return;
+    if (todayDay){
+      const rows = Array.from(todayDay.querySelectorAll('.schedule-event'));
+      target = rows.find(r=>{
         const t = startMinutes(r.dataset.time);
-        if (t !== null && nowMin < t + TL_GRACE_MIN){ target = r; break; }
+        return t !== null && nowMin < t + TL_GRACE_MIN;
+      }) || null;
+      if (!target){
+        const nextDay = days.find(el => dayKey(el) > today);
+        if (nextDay) target = firstRow(nextDay) || nextDay;
+        else target = rows[rows.length-1] || todayDay;
       }
-      if (!target && rows.length) target = rows[0];
-      if (!target) target = day;
+    } else {
+      const nextDay = days.find(el => dayKey(el) > today);
+      if (nextDay){
+        target = firstRow(nextDay) || nextDay;
+      } else {
+        const last = days[days.length-1];
+        const rows = Array.from(last.querySelectorAll('.schedule-event'));
+        target = rows[rows.length-1] || last;
+      }
     }
-    if (!target) target = document.querySelector('#concert-container .schedule-day');
     if (!target) return;
     let hh = 64;
     try{ hh = document.querySelector('.pl-header').getBoundingClientRect().height || 64; }catch(e){}
@@ -1642,11 +1666,19 @@ function renderTimeline(){
   const groups={};
   list.forEach(c=>{ (groups[c.date]||(groups[c.date]=[])).push(c); });
   // Отмотка: прошедшие 2 дня (приезжают с past_days=2 после fillFullPool) —
-  // группами перед текущими; поиск и подборки (top10/foryou/promo) не размываем
-  if (['date','weekend','upcoming','range'].includes(state.timelineMode)){
+  // группами перед текущими; поиск и подборки (top10/foryou/promo) не размываем.
+  // Конкретная будущая дата/диапазон — без «вчера/позавчера».
+  const showPast = state.timelineMode==='upcoming'
+    || state.timelineMode==='weekend'
+    || (state.timelineMode==='date' && state.selectedDate===state.todayISO);
+  if (showPast){
     const pastStart=(()=>{ const d=parseISO(state.todayISO); d.setDate(d.getDate()-2); return toISO(d); })();
+    const seen = new Set(list.map(c=>c.id));
     state.concerts.forEach(c=>{
-      if (c.date>=pastStart && c.date<state.todayISO){ (groups[c.date]||(groups[c.date]=[])).push(c); }
+      if (c.date>=pastStart && c.date<state.todayISO && !seen.has(c.id)){
+        (groups[c.date]||(groups[c.date]=[])).push(c);
+        seen.add(c.id);
+      }
     });
   }
   const dates=Object.keys(groups).sort();
