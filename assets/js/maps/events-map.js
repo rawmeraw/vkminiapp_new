@@ -372,6 +372,57 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return 0.92 + (1.16 - 0.92) * Math.sqrt(t);
     }
 
+    // Состояние события по времени: началось 15+ минут назад — гасим пин,
+    // меньше часа до начала — ставим секундомер. start_ms считает backend
+    // (эпоха старта в поясе города события), браузер ничего не пересчитывает.
+    var SOON_WINDOW_MS = 60 * 60 * 1000;
+    var STARTED_DELAY_MS = 15 * 60 * 1000;
+
+    function pinTimeState(event) {
+        var start = Number(event && event.start_ms);
+        if (!isFinite(start) || !start) return '';
+        var diff = start - Date.now();
+        if (diff <= -STARTED_DELAY_MS) return 'started';
+        if (diff > 0 && diff < SOON_WINDOW_MS) return 'soon';
+        return '';
+    }
+
+    function applyPinTimeState(pin, ts) {
+        if (!pin) return;
+        var needSoon = ts === 'soon';
+        if (ts === 'started') pin.classList.add('pl-map-pin--started');
+        else pin.classList.remove('pl-map-pin--started');
+        var badge = pin.querySelector('.pl-map-pin__urgent');
+        if (needSoon && !badge) {
+            badge = el('span', 'pl-map-pin__urgent');
+            badge.setAttribute('title', 'Скоро начало');
+            badge.innerHTML = '<i class="fas fa-stopwatch" aria-hidden="true"></i>';
+            var title = pin.querySelector('.pl-map-pin__title');
+            if (title && title.parentNode === pin) pin.insertBefore(badge, title);
+            else pin.appendChild(badge);
+        } else if (!needSoon && badge) {
+            badge.remove();
+        }
+    }
+
+    function refreshPinTimeState() {
+        if (!state.mapEl) return;
+        try {
+            var pins = state.mapEl.querySelectorAll('.pl-map-pin[data-id]');
+            for (var i = 0; i < pins.length; i++) {
+                var ev = findEvent(pins[i].getAttribute('data-id'));
+                if (ev) applyPinTimeState(pins[i], pinTimeState(ev));
+            }
+        } catch (err) {}
+    }
+
+    var pinTicker = null;
+    function ensurePinTicker() {
+        // Живой таймер: раз в минуту пересматриваем «скоро/началось» у существующих пинов
+        if (pinTicker) return;
+        pinTicker = setInterval(refreshPinTimeState, 60000);
+    }
+
     function buildPin(event) {
         var time = event.time ? event.time.slice(0, 5) : '';
         var title = event.title || 'Событие';
@@ -385,6 +436,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         btn.innerHTML = (time ? '<span class="pl-map-pin__time">' + escapeHtml(time) + '</span>' : '') +
             '<span class="pl-map-pin__title">' + escapeHtml(title) + '</span>' +
             (event.paid ? '<span class="pl-map-pin__crown" title="Концерт оплачен"><i class="fas fa-crown" aria-hidden="true"></i></span>' : '');
+        applyPinTimeState(btn, pinTimeState(event));
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
             toggleBalloon(event, btn);
@@ -3271,6 +3323,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         // не запрашивать геопозицию автоматом — только по клику на кнопку, запоминаем до чистки куки
         // requestUserLocation(false, true);
         fetchEmotions();
+        ensurePinTicker();
 
         window.__PermLiveMapReady = true;
         try {

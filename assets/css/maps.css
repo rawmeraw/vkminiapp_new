@@ -387,7 +387,7 @@ body.pl-map-fs #map {
     --pin-dy: -3px;
     transform: translate(calc(-50% + var(--pin-dx)), calc(-100% + var(--pin-dy))) scale(var(--pin-scale, 1));
     transform-origin: bottom center;
-    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, opacity 0.2s ease-out;
     z-index: 1;
     -webkit-tap-highlight-color: transparent;
     animation: none !important;
@@ -418,6 +418,33 @@ body.pl-map-fs #map {
     color: #fff;
     font-size: 10px;
     line-height: 1;
+}
+
+/* Секундомер: событие начнётся меньше чем через час (между временем и названием) */
+.pl-map-pin__urgent {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #e14425;
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* Событие началось 15+ минут назад: пин полупрозрачный, но заметный.
+   Наведение/фокус/открытый шар — полная непрозрачность. */
+.pl-map-pin--started {
+    opacity: 0.55;
+}
+
+.pl-map-pin--started:hover,
+.pl-map-pin--started:focus-visible,
+.pl-map-pin--started.is-active {
+    opacity: 1;
 }
 
 .pl-map-pin:hover,
