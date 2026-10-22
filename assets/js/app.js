@@ -118,6 +118,107 @@ function fmtHeaderDate(d){ const today=parseISO(state.todayISO); if(toISO(d)===s
 function fmtDateShort(iso){ const d=parseISO(iso); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`; }
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 
+/* «Сейчас» на таймлайне мини-аппа: начавшиеся гаснут (старт + 15 мин),
+   полоска времени скользит между строками. Часы — пояса выбранного города
+   (Intl), а не устройства пользователя. Логика — как timeline-runner.js. */
+const TL_GRACE_MIN = 15;
+const TL_TAIL_MIN = 90;
+const TL_TICK_MS = 20000;
+const TZ_FMT_CACHE = {};
+function cityMinutesNow(){
+  try{
+    const tz = cityTimezone(state.city);
+    if (!TZ_FMT_CACHE[tz]) {
+      TZ_FMT_CACHE[tz] = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    const s = TZ_FMT_CACHE[tz].format(new Date());
+    const m = String(s).match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    return (+m[1]) * 60 + (+m[2]);
+  }catch(e){ return null; }
+}
+function startMinutes(time){
+  const m = String(time||'').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+function weekendRangeForToday(){
+  const today = parseISO(state.todayISO);
+  const dow = today.getDay(); // 0=вс..6=сб
+  const toFri = dow === 0 ? -2 : (dow >= 5 ? -(dow - 5) : 5 - dow);
+  const friday = new Date(today); friday.setDate(today.getDate() + toFri);
+  const sunday = new Date(friday); sunday.setDate(friday.getDate() + 2);
+  return { start: toISO(friday), end: toISO(sunday) };
+}
+let timelineTicker = null;
+function ensureTimelineTicker(){
+  if (timelineTicker) return;
+  timelineTicker = setInterval(() => {
+    try {
+      if (!els.timelineWrap || els.timelineWrap.style.display === 'none') return;
+      updateTimelineNow(false);
+    } catch (e) {}
+  }, TL_TICK_MS);
+}
+function updateTimelineNow(instant){
+  const nowMin = cityMinutesNow();
+  if (nowMin === null) return;
+  const today = cityTodayISO(state.city);
+  const days = document.querySelectorAll('#concert-container .schedule-day');
+  days.forEach(day => {
+    const dayDate = day.getAttribute('data-date');
+    const events = day.querySelector('.schedule-day-events');
+    if (!events) return;
+    const rows = Array.from(events.querySelectorAll('.schedule-event'));
+    const items = [];
+    rows.forEach(r => {
+      const t = startMinutes(r.dataset.time);
+      if (t === null) return;
+      items.push({ row: r, t: t });
+      r.classList.toggle('started', dayDate === today && nowMin >= t + TL_GRACE_MIN);
+    });
+    let line = events.querySelector(':scope > .tl-now'); // переиспользуем при перерендере
+    if (dayDate !== today || !items.length || nowMin < items[0].t) {
+      if (line) line.remove();
+      return;
+    }
+    if (!line) {
+      line = document.createElement('div'); line.className = 'tl-now'; line.setAttribute('aria-hidden','true');
+      line.innerHTML = '<span class="tl-now__line"></span>';
+      events.appendChild(line);
+    }
+    const boxRect = events.getBoundingClientRect();
+    const tops = items.map(it => { const b = it.row.getBoundingClientRect(); return b.top + b.height / 2 - boxRect.top; });
+    const last = items.length - 1;
+    if (nowMin > items[last].t + TL_TAIL_MIN) { line.remove(); return; }
+    let top = null;
+    for (let n = 0; n < last; n++) {
+      if (nowMin < items[n + 1].t) {
+        const span = items[n + 1].t - items[n].t;
+        const frac = span > 0 ? (nowMin - items[n].t) / span : 0.5;
+        top = tops[n] + frac * (tops[n + 1] - tops[n]);
+        break;
+      }
+    }
+    if (top === null) {
+      const tail = Math.max(0, Math.min(1, (nowMin - items[last].t) / TL_TAIL_MIN));
+      top = tops[last] + tail * (boxRect.height - tops[last]);
+    }
+    top = Math.max(14, Math.min(boxRect.height - 14, top));
+    if (instant) {
+      line.style.transition = 'none';
+      line.style.top = top + 'px';
+      void line.offsetHeight;
+      line.style.transition = '';
+    } else {
+      line.style.transition = 'top ' + (TL_TICK_MS / 1000) + 's linear';
+      line.style.top = top + 'px';
+    }
+  });
+}
+
 function toast(msg){
   els.toast.textContent=msg;
   els.toast.classList.add('pl-toast--show');
@@ -1546,9 +1647,31 @@ function renderTimeline(){
     state.timelineMode=null;
     applyFilter();
   };
+  // Пилюли-переключатели «как на сайте» + бегунок времени
+  const pills=document.createElement('div'); pills.className='tl-pills';
+  const today=state.todayISO;
+  const pdef=[
+    {key:'date', mode:'date', cls:'tl-pill--today', icon:'fa-solid fa-clock', label:'Сейчас', act: state.timelineMode==='date' && state.selectedDate===today,
+      onClick(){ state.selectedDate=today; state.range=null; openTimeline('date'); } },
+    {key:'weekend', mode:'weekend', cls:'tl-pill--weekend', icon:'fa-solid fa-calendar-week', label:'Выходные', act: state.timelineMode==='weekend',
+      onClick(){ state.range=null; openTimeline('weekend'); } },
+    {key:'all', mode:'upcoming', cls:'tl-pill--all', icon:'fa-solid fa-list-ul', label:'Вся афиша', act: state.timelineMode==='upcoming',
+      onClick(){ openTimeline('upcoming'); } },
+    {key:'foryou', mode:'foryou', cls:'tl-pill--foryou', icon:'fa-solid fa-wand-magic-sparkles', label:'Для вас', act: state.timelineMode==='foryou',
+      onClick(){ openTimeline('foryou'); } },
+  ];
+  if(state.timelineMode!=='search'){
+    pdef.forEach(p=>{
+      const b=document.createElement('button'); b.type='button'; b.className='tl-pill '+p.cls+(p.act?' is-active':'');
+      b.innerHTML=`<i class="${p.icon}" aria-hidden="true"></i><span>${esc(p.label)}</span>`;
+      b.onclick=p.onClick; pills.appendChild(b);
+    });
+    els.timeline.appendChild(pills);
+  }
   dates.forEach(date=>{
     const d=parseISO(date);
     const dayEl=document.createElement('div'); dayEl.className='schedule-day';
+    dayEl.setAttribute('data-date', date);
     const title=document.createElement('div'); title.className='schedule-day-title';
     const isToday=date===state.todayISO;
     // без счетчика около даты (per request)
@@ -1558,6 +1681,9 @@ function renderTimeline(){
     groups[date].forEach(c=>{
       const slug=c.slug||extractSlug(c.url||'');
       const row=document.createElement('div'); row.className='schedule-event';
+      const startMin = startMinutes(c.time);
+      if (date===state.todayISO && startMin !== null && cityMinutesNow() >= startMin + TL_GRACE_MIN) row.classList.add('started');
+      if (c.time) row.dataset.time = c.time;
       row.innerHTML=`<span class="schedule-time">${esc(c.time||'')}</span>
         <a class="schedule-title" href="#/event/${esc(slug)}/" data-slug="${esc(slug)}">${esc(c.title)} ${parseFloat(c.cached_rating)>=4? `<span style="background:#ffc107;border-radius:999px;padding:2px 6px;font-size:10px"><i class="fa-solid fa-star"></i> ${esc(c.display_rating)}</span>`:''}</a>
         <span class="schedule-details">${esc(c.place_name||c.place?.name||'')} ${c.tags?.length? '› '+esc(c.tags[0].name):''} ${c.price===0?'› бесплатно': c.price? `› ${c.price}₽`:''}</span>`;
@@ -1566,12 +1692,15 @@ function renderTimeline(){
     dayEl.appendChild(events);
     els.timeline.appendChild(dayEl);
   });
+  ensureTimelineTicker();
+  requestAnimationFrame(()=>updateTimelineNow(true));
 }
 
 function getTimelineTitle(){
   if(state.timelineMode==='top10') return 'Топ-10';
   if(state.timelineMode==='foryou') return 'Рекомендации для вас';
   if(state.timelineMode==='promo') return 'Промокоды на билеты';
+  if(state.timelineMode==='weekend') return 'Концерты на выходные';
   if(state.timelineMode==='upcoming') return 'Ближайшие события';
   if(state.timelineMode==='date') return fmtHeaderDate(parseISO(state.selectedDate));
   if(state.timelineMode==='range') return `${fmtDateShort(state.range.start)} — ${fmtDateShort(state.range.end)}`;
@@ -1595,6 +1724,9 @@ function applyFilter(){
     list = [...state.upcomingPool].slice(0,400);
   } else if(state.timelineMode==='date'){
     list = state.concerts.filter(c=> c.date===state.selectedDate);
+  } else if(state.timelineMode==='weekend'){
+    if(!state.range) state.range = weekendRangeForToday();
+    list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
   } else if(state.timelineMode==='range'){
     list = state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
   } else if(state.range){
