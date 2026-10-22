@@ -180,31 +180,38 @@ function updateTimelineNow(instant){
       r.classList.toggle('started', dayDate === today && nowMin >= t + TL_GRACE_MIN);
     });
     let line = events.querySelector(':scope > .tl-now'); // переиспользуем при перерендере
-    if (dayDate !== today || !items.length || nowMin < items[0].t) {
+    if (dayDate !== today || !items.length) {
       if (line) line.remove();
       return;
     }
     if (!line) {
       line = document.createElement('div'); line.className = 'tl-now'; line.setAttribute('aria-hidden','true');
-      line.innerHTML = '<span class="tl-now__line"></span>';
+      line.innerHTML = '<span class="tl-now__line"></span><span class="tl-now__dot"></span>';
       events.appendChild(line);
     }
     const boxRect = events.getBoundingClientRect();
     const tops = items.map(it => { const b = it.row.getBoundingClientRect(); return b.top + b.height / 2 - boxRect.top; });
     const last = items.length - 1;
-    if (nowMin > items[last].t + TL_TAIL_MIN) { line.remove(); return; }
-    let top = null;
-    for (let n = 0; n < last; n++) {
-      if (nowMin < items[n + 1].t) {
-        const span = items[n + 1].t - items[n].t;
-        const frac = span > 0 ? (nowMin - items[n].t) / span : 0.5;
-        top = tops[n] + frac * (tops[n + 1] - tops[n]);
-        break;
+    if (nowMin >= items[last].t + TL_TAIL_MIN) { line.remove(); return; }
+    let top;
+    if (nowMin < items[0].t) {
+      // до первого старта — прижимаем к верхней границе первой строки (бегунок всегда виден)
+      const firstRect = items[0].row.getBoundingClientRect();
+      top = tops[0] - firstRect.height / 2;
+    } else {
+      top = null;
+      for (let n = 0; n < last; n++) {
+        if (nowMin < items[n + 1].t) {
+          const span = items[n + 1].t - items[n].t;
+          const frac = span > 0 ? (nowMin - items[n].t) / span : 0.5;
+          top = tops[n] + frac * (tops[n + 1] - tops[n]);
+          break;
+        }
       }
-    }
-    if (top === null) {
-      const tail = Math.max(0, Math.min(1, (nowMin - items[last].t) / TL_TAIL_MIN));
-      top = tops[last] + tail * (boxRect.height - tops[last]);
+      if (top === null) {
+        const tail = Math.max(0, Math.min(1, (nowMin - items[last].t) / TL_TAIL_MIN));
+        top = tops[last] + tail * (boxRect.height - tops[last]);
+      }
     }
     top = Math.max(14, Math.min(boxRect.height - 14, top));
     if (instant) {

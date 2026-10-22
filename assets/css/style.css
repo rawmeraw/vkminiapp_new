@@ -276,11 +276,14 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .tl-pill:active{filter:brightness(.96)}
 @media(min-width:769px){.tl-pill{padding:9px 14px;font-size:14px;border-radius:15px}}
 
-/* Бегунок «сейчас» в блоке «Сегодня» — позицию ведёт JS */
+/* Бегунок «сейчас» в блоке «Сегодня» — позицию ведёт JS; виден всегда,
+   до первого старта прижат к верхней границе первой строки */
 .schedule-day-events{position:relative}
 #concert-container .tl-now{position:absolute;left:0;right:0;height:0;top:50%;pointer-events:none;z-index:3;transition:top 20s linear}
-#concert-container .tl-now__line{position:absolute;left:0;right:0;top:-1px;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(225,68,37,.25) 0%,rgba(225,68,37,.42) 12%,rgba(225,68,37,.52) 42%,rgba(225,68,37,.3) 72%,rgba(225,68,37,.12) 92%,transparent 100%)}
-@media (prefers-reduced-motion: reduce){#concert-container .tl-now{transition:none}}
+#concert-container .tl-now__line{position:absolute;left:0;right:0;top:-1px;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(225,68,37,.9) 0%,rgba(225,68,37,.6) 20%,rgba(225,68,37,.45) 45%,rgba(225,68,37,.28) 70%,rgba(225,68,37,.1) 92%,transparent 100%)}
+#concert-container .tl-now__dot{position:absolute;left:22px;top:-5px;width:10px;height:10px;border-radius:50%;background:#e14425;box-shadow:0 0 0 3px rgba(225,68,37,.18);animation:tl-now-pulse 3s ease-in-out infinite}
+@keyframes tl-now-pulse{0%,100%{box-shadow:0 0 0 3px rgba(225,68,37,.25)}50%{box-shadow:0 0 0 8px rgba(225,68,37,.08)}}
+@media (prefers-reduced-motion: reduce){#concert-container .tl-now{transition:none}#concert-container .tl-now__dot{animation:none}}
 /* Grid on desktop for timeline cards (mirror index slider) */
 @media(min-width:769px){
   #concert-container.timeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
