@@ -271,6 +271,7 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .tl-pill--today{background:#e6f4ea;color:#1e8e4e}
 .tl-pill--weekend{background:#ece7fa;color:#6a4fd0}
 .tl-pill--all{background:#e3f0fc;color:#1a73e8}
+.tl-pill--free{background:#fdeeda;color:#d97a1f}
 .tl-pill--foryou{background:#fdeeda;color:#d97a1f}
 .tl-pill.is-active{box-shadow:inset 0 0 0 1.5px currentColor;font-weight:700}
 .tl-pill:active{filter:brightness(.96)}

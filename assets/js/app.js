@@ -296,6 +296,7 @@ const state = {
   top10Pool: [],
   forYouPool: [],
   promoPool: [],
+  freePool: [],
   promoTotal: 0,
   vkUserId: null,
   vkName: '',
@@ -378,6 +379,103 @@ const CITY_FALLBACK = [
   {slug:'murmansk', name:'Мурманск', full_name:'Мурманск', genitive:'Мурманска', timezone:'Europe/Moscow', utc_offset:3, lat:68.9585, lon:33.0827, is_default:false},
   {slug:'syktyvkar', name:'Сыктывкар', full_name:'Сыктывкар', genitive:'Сыктывкара', timezone:'Europe/Moscow', utc_offset:3, lat:61.6687, lon:50.8358, is_default:false},
 ];
+
+// Координаты всех городов витрины: страховка, если /api/cities/ вернул null
+// (старый кеш) или город добавлен в CITY_FALLBACK без lat/lon. Значения
+// сверены с City.map_center; для мини-аппа это резерв, основной источник — API.
+const CITY_COORDS = {
+  'perm': [58.0095, 56.2778],
+  'moscow': [55.7558, 37.6173],
+  'spb': [59.9343, 30.3351],
+  'novosibirsk': [55.0302, 82.9204],
+  'ekb': [56.8389, 60.6057],
+  'kazan': [55.7887, 49.1221],
+  'nizhniy': [56.2965, 43.9361],
+  'chelyabinsk': [55.1644, 61.4368],
+  'ufa': [54.7388, 55.9721],
+  'krasnodar': [45.0355, 38.9753],
+  'rostov': [47.2224, 39.7189],
+  'samara': [53.1959, 50.1002],
+  'tyumen': [57.1522, 65.5412],
+  'izhevsk': [56.8527, 53.2115],
+  'kirov': [58.6035, 49.6668],
+  'voronezh': [51.672, 39.1843],
+  'volgograd': [48.708, 44.5133],
+  'omsk': [55.0084, 73.3242],
+  'krasnoyarsk': [56.0153, 92.8932],
+  'abakan': [53.7207, 91.4406],
+  'astrakhan': [46.3498, 48.0326],
+  'barnaul': [53.3475, 83.7788],
+  'belgorod': [50.5956, 36.5873],
+  'blagoveshchensk': [50.26, 127.5337],
+  'bryansk': [53.2424, 34.3668],
+  'veliky-novgorod': [58.561, 31.2809],
+  'vladikavkaz': [43.0246, 44.6821],
+  'vladimir': [56.1289, 40.4075],
+  'vologda': [59.2189, 39.8934],
+  'ivanovo': [56.9957, 40.9812],
+  'kaluga': [54.5101, 36.2598],
+  'kostroma': [57.7679, 40.9269],
+  'kurgan': [55.4409, 65.3421],
+  'kursk': [51.727, 36.1922],
+  'lipetsk': [52.6051, 39.5964],
+  'magnitogorsk': [53.407, 58.9811],
+  'miass': [55.0506, 60.1087],
+  'nizhnevartovsk': [60.9384, 76.5591],
+  'novokuznetsk': [53.7582, 87.1465],
+  'novocherkassk': [47.4107, 40.102],
+  'obninsk': [55.0952, 36.6119],
+  'orel': [52.9709, 36.0642],
+  'orenburg': [51.7671, 55.0979],
+  'penza': [53.1953, 45.019],
+  'petrozavodsk': [61.7892, 34.3688],
+  'pskov': [57.8174, 28.3343],
+  'rybinsk': [58.049, 38.8559],
+  'ryazan': [54.6703, 39.6884],
+  'saransk': [54.1867, 45.1838],
+  'saratov': [51.5924, 46.0348],
+  'sevastopol': [44.6166, 33.5254],
+  'sergiev-posad': [56.3153, 38.136],
+  'simferopol': [44.9521, 34.1024],
+  'smolensk': [54.7814, 32.0461],
+  'stavropol': [45.0433, 41.9691],
+  'taganrog': [47.2155, 38.9284],
+  'tambov': [52.7216, 41.4524],
+  'tver': [56.8587, 35.9208],
+  'tolyatti': [53.5099, 49.4189],
+  'tomsk': [56.4888, 84.9523],
+  'tula': [54.193, 37.6175],
+  'ulyanovsk': [54.315, 48.4034],
+  'ussuriysk': [43.7972, 131.9521],
+  'cherkessk': [44.2285, 42.0483],
+  'yaroslavl': [57.6508, 39.8719],
+  'sochi': [43.5855, 39.7231],
+  'irkutsk': [52.2864, 104.2807],
+  'khabarovsk': [48.4802, 135.0719],
+  'vladivostok': [43.1155, 131.8855],
+  'kaliningrad': [54.7104, 20.4522],
+  'novorossiysk': [44.7239, 37.7689],
+  'arkhangelsk': [64.5399, 40.5157],
+  'yakutsk': [62.0355, 129.6755],
+  'murmansk': [68.9585, 33.0827],
+  'syktyvkar': [61.6687, 50.8358],
+  'lysva': [58.1086, 57.8053],
+  'kungur': [57.4386, 56.9594],
+};
+function cityCoords(c){
+  const slug = (c && c.slug) || c;
+  if (c && typeof c === 'object' && typeof c.lat === 'number' && typeof c.lon === 'number'
+      && isFinite(c.lat) && isFinite(c.lon)) {
+    return {lat: c.lat, lon: c.lon};
+  }
+  const p = CITY_COORDS[slug];
+  return p ? {lat: p[0], lon: p[1]} : null;
+}
+function withCityCoords(c){
+  const p = cityCoords(c);
+  if (c && typeof c === 'object' && p) { c.lat = p.lat; c.lon = p.lon; }
+  return c;
+}
 // Хук для слоя эмоций карты (events-map.js: miniCitySlug читает citySlugOf)
 window.citySlugOf = function(){ return state.city || 'perm'; };
 
@@ -391,12 +489,12 @@ function cityPrefix(slug){
 }
 // Центр текущего города {lat, lon}: данные /api/cities/, иначе фолбэк-таблица
 function cityCenterLatLon(slug){
-  const c = cityBySlug(slug || state.city);
-  // typeof-проверка: isFinite(null)===true, а null-координаты нам не подходят
-  if(c && typeof c.lat==='number' && typeof c.lon==='number' && isFinite(c.lat) && isFinite(c.lon)){
-    return {lat: c.lat, lon: c.lon};
-  }
-  const f = CITY_FALLBACK.find(x=>x.slug===(slug || state.city)) || CITY_FALLBACK[0];
+  const key = slug || state.city;
+  const c = cityBySlug(key);
+  // API/фолбэк-объект, затем общий справочник координат (покрывает все города).
+  const p = cityCoords(c || key);
+  if(p) return p;
+  const f = CITY_FALLBACK.find(x=>x.slug===key) || CITY_FALLBACK[0];
   return {lat: f.lat, lon: f.lon};
 }
 function cityCenterStr(slug){
@@ -419,21 +517,21 @@ function ck(base){
 
 async function loadCities(){
   try{
-    const raw = localStorage.getItem('pl_cities_v2');
+    const raw = localStorage.getItem('pl_cities_v3');
     if(raw){
       const o = JSON.parse(raw);
       if(o && o.t && Date.now()-o.t < 10*60*1000 && Array.isArray(o.v) && o.v.length){
-        state.cities = o.v;
-        return o.v;
+        state.cities = o.v.map(withCityCoords);
+        return state.cities;
       }
     }
   }catch(e){}
   const j = await fetchJSON(`${API_BASE}/api/cities/`);
   if(j && Array.isArray(j.cities) && j.cities.length){
-    state.cities = j.cities;
-    try{ localStorage.setItem('pl_cities_v2', JSON.stringify({t:Date.now(), v:j.cities})); }catch(e){}
+    state.cities = j.cities.map(withCityCoords);
+    try{ localStorage.setItem('pl_cities_v3', JSON.stringify({t:Date.now(), v:state.cities})); }catch(e){}
   } else if(!state.cities.length){
-    state.cities = CITY_FALLBACK.slice();
+    state.cities = CITY_FALLBACK.map(withCityCoords);
   }
   return state.cities;
 }
@@ -684,6 +782,7 @@ async function switchCity(slug, opts){
   state.upcomingPool=[];
   state.forYouPool=[];
   state.promoPool=[];
+  state.freePool=[];
   state.promoTotal=0;
   state.hasForYou=false;
   state.fullLoaded=false;
@@ -724,7 +823,8 @@ function plural(n, one, few, many){
 let citiesMap = null, citiesMapZoom = 3, citiesYmapsPromise = null, citiesWired = false;
 
 function citiesList(){
-  return state.cities.length ? state.cities : CITY_FALLBACK;
+  const list = state.cities.length ? state.cities : CITY_FALLBACK;
+  return list.map(withCityCoords);
 }
 
 // Группировка городов по регионам (те же CITY_GROUPS, что на /cities/):
@@ -891,15 +991,24 @@ function refreshCitiesPins(){
 function ensureCitiesMap(){
   const mapEl = document.getElementById('cities-russia-map');
   if(!mapEl || !els.viewCities || !els.viewCities.classList.contains('view--active')) return;
-  const pts = citiesList().filter(c =>
-    typeof c.lat === 'number' && typeof c.lon === 'number' && isFinite(c.lat) && isFinite(c.lon)
-  ).map(c => ({slug: c.slug, name: c.name, count: Number(c.event_count) || 0, lat: c.lat, lon: c.lon}));
+  const pts = citiesList().map(c => {
+    const p = cityCoords(c);
+    return p ? {slug: c.slug, name: c.name, count: Number(c.event_count) || 0, lat: p.lat, lon: p.lon} : null;
+  }).filter(Boolean);
   if(!pts.length){
     const sec = document.getElementById('cities-map-section');
     if(sec) sec.style.display = 'none';
     return;
   }
-  if(citiesMap){ refreshCitiesPins(); return; }
+  // Подпись набора: сначала рисуем фолбэк (30), затем приходит API (75).
+  // Если города/координаты изменились — перестраиваем карту, иначе новые
+  // города остались бы без пинов.
+  const mapSig = pts.map(p => p.slug+'@'+p.lat+','+p.lon+'#'+p.count).join('|');
+  if(citiesMap){
+    if(citiesMap._plSig === mapSig){ refreshCitiesPins(); return; }
+    citiesMap = null;
+    mapEl.innerHTML = '';
+  }
   let sumLon = 0, sumLat = 0;
   pts.forEach(p => { sumLon += p.lon; sumLat += p.lat; });
   // Как на сайте: среднее + сдвиг, чтобы влезли Сибирь и юг.
@@ -926,6 +1035,7 @@ function ensureCitiesMap(){
       behaviors: ['drag', 'pinchZoom', 'dblClick', 'scrollZoom']
     });
     citiesMap = map;
+    citiesMap._plSig = mapSig;
     try{ if(typeof map.zoom === 'number') citiesMapZoom = map.zoom; }catch(e){}
     map.addChild(new ymaps3.YMapDefaultSchemeLayer({theme: 'light'}));
     map.addChild(new ymaps3.YMapDefaultFeaturesLayer({zIndex: 1800}));
@@ -981,6 +1091,9 @@ function rebuildPools(){
     }catch(e){ return false; }
   }).sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date));
   state.promoTotal = state.promoPool.length;
+  // Бесплатные: будущие концерты с price=0 — как /timeline/free/ на сайте
+  state.freePool = future.filter(c=> c.price !== '' && Number(c.price) === 0)
+    .sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
   // В календаре отмечаем только будущие даты (прошлые — из пулов отмотки таймлайна)
   if (!state.datesWithEvents.size) state.datesWithEvents = new Set(state.concerts.filter(c=>c.date>=state.todayISO).map(c => c.date));
 }
@@ -1153,6 +1266,11 @@ async function loadData(){
   try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
 }
 
+function normalizePrice(v){
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  return isFinite(n) ? n : v;
+}
 function normalizeApiConcert(c){
   const slug = c.slug || extractSlug(c.url||c.link||'');
   const placeName = c.place?.name || c.place_name || '';
@@ -1164,7 +1282,7 @@ function normalizeApiConcert(c){
   return {
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
     place, place_name: placeName,
-    bg_color: bg, main_image: img, images: c.images||[], price: c.price ?? '',
+    bg_color: bg, main_image: img, images: c.images||[], price: normalizePrice(c.price),
     ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     reviews_count: Number(c.reviews_count||0), reviews_avg: (c.reviews_avg==null?null:parseFloat(c.reviews_avg)),
@@ -1182,7 +1300,7 @@ function normalizeApiConcertLight(c){
   return {
     id:c.id, title:c.title||c.name||'Без названия', slug, date:(c.date||'').slice(0,10), time:(c.time||'19:00').slice(0,5),
     place: c.place||{name:placeName, coordinates:cityCenterStr()}, place_name: placeName,
-    bg_color: bg, main_image: img, price: c.price ?? '',
+    bg_color: bg, main_image: img, price: normalizePrice(c.price),
     ticket_vendor: c.ticket_vendor || '',
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     is_paid: !!c.is_paid, tickets:c.tickets||'', tags: c.tags||[], description:''
@@ -1196,7 +1314,7 @@ function normalizeApiEvent(e){
   return {
     id:e.id||Math.floor(Math.random()*1e6), title:e.title, slug, date:e.date, time:(e.time||'19:00').slice(0,5),
     place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : cityCenterStr()), address:e.address||''}, place_name:placeName,
-    bg_color:bg, main_image:img, price:e.price ?? '', cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
+    bg_color:bg, main_image:img, price:normalizePrice(e.price), cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
     is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||''
   };
 }
@@ -1671,6 +1789,7 @@ function renderTimeline(){
   const showPast = state.timelineMode==='upcoming'
     || state.timelineMode==='weekend'
     || (state.timelineMode==='date' && state.selectedDate===state.todayISO);
+  // «Бесплатно» — только будущие, как /timeline/free/ на сайте
   if (showPast){
     const pastStart=(()=>{ const d=parseISO(state.todayISO); d.setDate(d.getDate()-2); return toISO(d); })();
     const seen = new Set(list.map(c=>c.id));
@@ -1682,6 +1801,12 @@ function renderTimeline(){
     });
   }
   const dates=Object.keys(groups).sort();
+  // Рекомендации красим bg_color, как строки таймлайна на сайте
+  const recoKeys = new Set();
+  (state.forYouPool||[]).forEach(x=>{
+    if(x.id!=null) recoKeys.add('id:'+String(x.id));
+    if(x.slug) recoKeys.add('slug:'+x.slug);
+  });
   // header with back
   const header=document.createElement('div');
   header.style.cssText='display:flex;align-items:center;gap:8px;margin:12px 0';
@@ -1701,6 +1826,8 @@ function renderTimeline(){
       onClick(){ state.range=null; openTimeline('weekend'); } },
     {key:'all', mode:'upcoming', cls:'tl-pill--all', icon:'fa-solid fa-list-ul', label:'Вся афиша', act: state.timelineMode==='upcoming',
       onClick(){ openTimeline('upcoming'); } },
+    {key:'free', mode:'free', cls:'tl-pill--free', icon:'fa-solid fa-gift', label:'Бесплатно', act: state.timelineMode==='free',
+      onClick(){ openTimeline('free'); } },
     {key:'foryou', mode:'foryou', cls:'tl-pill--foryou', icon:'fa-solid fa-wand-magic-sparkles', label:'Для вас', act: state.timelineMode==='foryou',
       onClick(){ openTimeline('foryou'); } },
   ];
@@ -1726,6 +1853,7 @@ function renderTimeline(){
     groups[date].forEach(c=>{
       const slug=c.slug||extractSlug(c.url||'');
       const row=document.createElement('div'); row.className='schedule-event'+(isPastDay?' is-past':'');
+      if (c.bg_color && (recoKeys.has('id:'+String(c.id)) || recoKeys.has('slug:'+slug))) row.style.backgroundColor = c.bg_color;
       const startMin = startMinutes(c.time);
       if (date===state.todayISO && startMin !== null && cityMinutesNow() >= startMin + TL_GRACE_MIN) row.classList.add('started');
       if (c.time) row.dataset.time = c.time;
@@ -1752,6 +1880,7 @@ function getTimelineTitle(){
   if(state.timelineMode==='top10') return 'Топ-10';
   if(state.timelineMode==='foryou') return 'Рекомендации для вас';
   if(state.timelineMode==='promo') return 'Промокоды на билеты';
+  if(state.timelineMode==='free') return 'Бесплатные концерты';
   if(state.timelineMode==='weekend') return 'Концерты на выходные';
   if(state.timelineMode==='upcoming') return 'Ближайшие события';
   if(state.timelineMode==='date') return fmtHeaderDate(parseISO(state.selectedDate));
@@ -1772,6 +1901,8 @@ function applyFilter(){
     list = [...state.forYouPool].slice(0,80);
   } else if(state.timelineMode==='promo'){
     list = [...state.promoPool].slice(0,80);
+  } else if(state.timelineMode==='free'){
+    list = state.freePool.slice();
   } else if(state.timelineMode==='upcoming'){
     list = [...state.upcomingPool].slice(0,400);
   } else if(state.timelineMode==='date'){
