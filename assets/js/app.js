@@ -199,7 +199,7 @@ function scrollTimelineToNow(){
      Начавшиеся строки остаются выше, то есть «уезжают вверх»; прошедшие
      2 дня — ещё выше, их можно долистать вручную. Если сегодня всё
      стартовало — якорь на следующий день; если блока «сегодня» нет —
-     на первый будущий день, иначе на последний. */
+     на первый будущий день. */
   try{
     const nowMin = cityMinutesNow();
     if (nowMin === null) return;
@@ -210,11 +210,8 @@ function scrollTimelineToNow(){
     const firstRow = el => el.querySelector('.schedule-event');
     let target = null;
     const todayDay = days.find(el => dayKey(el) === today);
-    const hasPast = days.some(el => dayKey(el) < today);
     const hasFuture = days.some(el => dayKey(el) > today);
-    /* Автоскролл только там, где есть «сейчас» (или отмотка + будущее).
-       На конкретной будущей/прошлой дате оставляем верх с заголовком. */
-    if (!todayDay && !(hasPast && hasFuture)) return;
+    if (!todayDay && !hasFuture) return;
     if (todayDay){
       const rows = Array.from(todayDay.querySelectorAll('.schedule-event'));
       target = rows.find(r=>{
@@ -249,6 +246,17 @@ function scrollTimelineToNow(){
     const top = isDay
       ? (dayTitle ? dayTitle.getBoundingClientRect().top + window.scrollY : targetAbs) - (hh + pillsH)
       : targetAbs - (hh + pillsH + titleH);
+    const oldSpacer = document.getElementById('tl-scroll-spacer');
+    if (oldSpacer) oldSpacer.remove();
+    const needed = top + window.innerHeight + 24;
+    if (needed > document.documentElement.scrollHeight){
+      const spacer = document.createElement('div');
+      spacer.id = 'tl-scroll-spacer';
+      spacer.setAttribute('aria-hidden','true');
+      const bodyBottom = Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height);
+      spacer.style.cssText = 'height:' + (needed - bodyBottom) + 'px;margin:0;padding:0;border:0;pointer-events:none;';
+      document.body.appendChild(spacer);
+    }
     window.scrollTo({top: Math.max(0, top), behavior:'auto'});
   }catch(e){}
 }
@@ -1784,6 +1792,8 @@ function renderSliderSkeletons(){
 // Timeline — only when timelineMode active
 function renderTimeline(){
   const list = state.filtered;
+  const oldSpacer = document.getElementById('tl-scroll-spacer');
+  if (oldSpacer) oldSpacer.remove();
   els.timeline.innerHTML='';
   if(!list.length){
     els.timelineEmpty.classList.remove('hidden');
@@ -2677,6 +2687,8 @@ function switchTab(tab, keepHistory){
   document.body.classList.remove('map-fullscreen','pl-map-fs');
   // на вкладке карты скролл страницы блокируем: хедер всегда на месте, карта ровно от хедера до футера
   document.body.classList.toggle('map-tab-open', tab==='map');
+  const tlSpacer = document.getElementById('tl-scroll-spacer');
+  if (tlSpacer) tlSpacer.style.display = tab==='feed' ? '' : 'none';
   document.documentElement.style.removeProperty('height');
   document.body.style.removeProperty('overflow');
   document.body.style.removeProperty('height');
