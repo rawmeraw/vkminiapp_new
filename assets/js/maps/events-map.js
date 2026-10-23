@@ -2675,6 +2675,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function setMapHeight() {
         var mapEl = document.getElementById('map');
         if (!mapEl) return;
+        if (!document.body.classList.contains('map-tab-open')) {
+            document.body.style.removeProperty('height');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('--header-height');
+            document.documentElement.style.removeProperty('height');
+            return;
+        }
         var headerHeight = 64;
         var isFs = document.body.classList.contains('pl-map-fs');
         var headEl = document.querySelector('.map-page-head');

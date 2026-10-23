@@ -239,8 +239,25 @@ function scrollTimelineToNow(){
     if (!target) return;
     let hh = 64;
     try{ hh = document.querySelector('.pl-header').getBoundingClientRect().height || 64; }catch(e){}
-    const top = target.getBoundingClientRect().top + window.scrollY - (hh + 14);
+    const pills = document.querySelector('#concert-container .tl-pills');
+    const pillsH = pills ? pills.getBoundingClientRect().height : 0;
+    const day = target.closest ? target.closest('.schedule-day') : null;
+    const dayTitle = day ? day.querySelector('.schedule-day-title') : null;
+    const titleH = dayTitle ? dayTitle.getBoundingClientRect().height : 0;
+    const targetAbs = target.getBoundingClientRect().top + window.scrollY;
+    const isDay = target.classList && target.classList.contains('schedule-day');
+    const top = isDay
+      ? (dayTitle ? dayTitle.getBoundingClientRect().top + window.scrollY : targetAbs) - (hh + pillsH)
+      : targetAbs - (hh + pillsH + titleH);
     window.scrollTo({top: Math.max(0, top), behavior:'auto'});
+  }catch(e){}
+}
+
+function syncTimelineStickyOffsets(){
+  try{
+    const pills = document.querySelector('#concert-container .tl-pills');
+    const h = pills ? pills.getBoundingClientRect().height : 0;
+    if (els.timeline) els.timeline.style.setProperty('--tl-pills-h', h + 'px');
   }catch(e){}
 }
 
@@ -1870,10 +1887,13 @@ function renderTimeline(){
     els.timeline.appendChild(dayEl);
   });
   ensureTimelineTicker();
+  syncTimelineStickyOffsets();
   requestAnimationFrame(()=>{
     updateTimelineNow();
+    syncTimelineStickyOffsets();
     if (state._tlScrollPending){ state._tlScrollPending=false; scrollTimelineToNow(); }
   });
+  setTimeout(syncTimelineStickyOffsets, 300);
 }
 
 function getTimelineTitle(){
@@ -2982,6 +3002,7 @@ function wire(){
   }, true);
   // свайп влево-вправо как назад/вперед убран на страницах приложения (мешал листать слайдеры/карту)
   document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSheet(); closeCalendar(); try{ closeCityDropdown(); closeSectionsDropdown(); }catch(err){} }});
+  window.addEventListener('resize', ()=>{ try{ syncTimelineStickyOffsets(); }catch(e){} });
   window.addEventListener('popstate', e=>{
     if(e.state && e.state.detail){ openDetail(e.state.detail, false); return; }
     if(state.detailSlug){ closeDetail(false); return; }
@@ -2996,6 +3017,7 @@ function wire(){
 
 (async function boot(){
   wire();
+  try{ if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncTimelineStickyOffsets); }catch(e){}
   // календарь в хедере сразу красный (feed активен)
   switchTab('feed', true);
   // город как на сайте: запомненный — сразу; иначе дефолт + фоновая геопроверка
