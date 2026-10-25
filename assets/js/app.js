@@ -158,6 +158,48 @@ function startMinutes(time){
   if (h > 23 || mi > 59) return null;
   return h * 60 + mi;
 }
+// Epoch-миллисекунды старта события: дата + время в поясе города события.
+// Аналог _concert_start_ms() на бэке: по ним пины карты сами решают —
+// «скоро начало» (будильник-секундомер) или «уже началось» (полупрозрачность).
+const START_MS_CACHE = {};
+const TZ_PARTS_FMT_CACHE = {};
+function tzPartsFormatter(tz){
+  if (!TZ_PARTS_FMT_CACHE[tz]) {
+    TZ_PARTS_FMT_CACHE[tz] = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+  return TZ_PARTS_FMT_CACHE[tz];
+}
+function tzOffsetMs(tz, atMs){
+  try {
+    const parts = tzPartsFormatter(tz).formatToParts(new Date(atMs));
+    const get = t => { const p = parts.find(x => x.type === t); return p ? +p.value : 0; };
+    const asUTC = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+    return asUTC - atMs;
+  } catch (e) { return 0; }
+}
+function cityStartMs(dateISO, timeStr, tzSlug){
+  const hm = String(timeStr || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  const tz = tzSlug || cityTimezone();
+  if (!dateISO || !hm || !tz) return null;
+  const key = tz + '|' + dateISO + '|' + hm[1] + ':' + hm[2];
+  if (Object.prototype.hasOwnProperty.call(START_MS_CACHE, key)) return START_MS_CACHE[key];
+  let value = null;
+  // Настенное время как UTC — стартовое приближение; смещение пояса
+  // вычитаем 2 раза (вторая итерация стабилизирует смену DST).
+  const wallUTC = Date.parse(dateISO + 'T' + hm[1].padStart(2, '0') + ':' + hm[2] + ':00Z');
+  if (isFinite(wallUTC)) {
+    let utc = wallUTC - tzOffsetMs(tz, wallUTC);
+    const off2 = tzOffsetMs(tz, utc);
+    if (off2 !== tzOffsetMs(tz, wallUTC)) utc = wallUTC - off2;
+    value = utc;
+  }
+  START_MS_CACHE[key] = value;
+  return value;
+}
 function weekendRangeForToday(){
   const today = parseISO(state.todayISO);
   const dow = today.getDay(); // 0=вс..6=сб
@@ -2615,6 +2657,7 @@ function refreshMapMarkers(){
         return {
           id:c.id, title:c.title, url:siteEventUrl(c.slug||''),
           date:c.date, time:c.time||'', price:c.price||0, paid:!!c.is_paid, rating:parseFloat(c.cached_rating||3),
+          start_ms:cityStartMs(c.date, c.time),
           place:c.place_name||c.place?.name||'', address:c.place?.address||'',
           coordinates:[lng, lat],
           image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false

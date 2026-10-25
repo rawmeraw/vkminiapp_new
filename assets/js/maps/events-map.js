@@ -411,7 +411,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var pins = state.mapEl.querySelectorAll('.pl-map-pin[data-id]');
             for (var i = 0; i < pins.length; i++) {
                 var ev = findEvent(pins[i].getAttribute('data-id'));
-                if (ev) applyPinTimeState(pins[i], pinTimeState(ev));
+                if (ev) {
+                    applyPinTimeState(pins[i], pinTimeState(ev));
+                    // Пин перешёл порог «началось» — переписываем и слой z
+                    var mk = pins[i]._ymarker;
+                    if (mk && pins[i]._lnglat) {
+                        mk._zBoost = pinTimeState(ev) === 'started' ? -1000000 : (ev.paid ? 30000 : 0);
+                        setMarkerZIndex(mk, pins[i]._lnglat, false);
+                    }
+                }
             }
         } catch (err) {}
     }
@@ -516,7 +524,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                     return emMarker;
                 }
                 var pin = buildPin(feature.properties);
-                var m = new state.YMapMarker({ coordinates: feature.geometry.coordinates, zIndex: markerZIndex(feature.geometry.coordinates) }, pin);
+                // Начавшиеся (15+ мин от старта) — всегда ПОД неначавшими
+                // (базовый zIndex от координат ~4.7e5, поэтому -1e6 reliably гасит),
+                // оплаченные неначавшие — поверх кластеров (+20000 у кругов, +50000 у эмоций).
+                var evProps = feature.properties || {};
+                var startedPin = pinTimeState(evProps) === 'started';
+                var pinBoost = startedPin ? -1000000 : (evProps.paid ? 30000 : 0);
+                pin._zBoost = pinBoost;
+                var m = new state.YMapMarker({ coordinates: feature.geometry.coordinates, zIndex: markerZIndex(feature.geometry.coordinates) + pinBoost }, pin);
+                m._zBoost = pinBoost;
                 pin._ymarker = m;
                 pin._lnglat = feature.geometry.coordinates;
                 pin.addEventListener('mouseenter', function () { setMarkerZIndex(m, feature.geometry.coordinates, true); });
@@ -2926,7 +2942,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function setMarkerZIndex(marker, lnglat, boost) {
         if (!marker) return;
         try {
-            var z = markerZIndex(lnglat) + (boost ? 100000 : 0);
+            var base = 0;
+            try {
+                if (marker._zBoost) base = marker._zBoost;
+                else if (marker.element && marker.element._zBoost) base = marker.element._zBoost;
+            } catch (e2) {}
+            var z = markerZIndex(lnglat) + base + (boost ? 100000 : 0);
             if (marker.update) marker.update({ zIndex: z });
 
             if (marker.element) marker.element.style.zIndex = String(z);
