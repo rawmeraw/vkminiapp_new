@@ -2989,20 +2989,35 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return best;
     }
 
+    var PAID_SOLO_ZOOM = 10;
+
     function clusterByPixelDistance(px) {
         return {
             render: function (ctx) {
                 var map = ctx.map;
                 var features = ctx.features;
-                // Эмоции — всегда отдельными маркерами, вне кластеров.
+                var soloPaid = [];
+                // Эмоции — всегда отдельными маркерами, вне кластеров
+                // (как оплаченные на детальных масштабах, но на любом зуме).
                 var soloEmotions = [];
-                var pool = [];
-                for (var fi = 0; fi < features.length; fi++) {
-                    var fpr = features[fi].properties || {};
-                    if (fpr.featureType === 'emotion') soloEmotions.push(features[fi]);
-                    else pool.push(features[fi]);
+                if (map.zoom >= PAID_SOLO_ZOOM) {
+                    var pool = [];
+                    for (var i = 0; i < features.length; i++) {
+                        var pr = features[i].properties || {};
+                        if (pr.featureType === 'emotion') soloEmotions.push(features[i]);
+                        else if (pr.paid && !pr.featureType) soloPaid.push(features[i]);
+                        else pool.push(features[i]);
+                    }
+                    features = pool;
+                } else {
+                    var pool2 = [];
+                    for (var j = 0; j < features.length; j++) {
+                        var pr2 = features[j].properties || {};
+                        if (pr2.featureType === 'emotion') soloEmotions.push(features[j]);
+                        else pool2.push(features[j]);
+                    }
+                    features = pool2;
                 }
-                features = pool;
                 var projection = map.projection;
                 var worldPerPx = 1 / (128 * Math.pow(2, map.zoom));
                 var r = (typeof px === 'function' ? px(map.zoom) : px) * worldPerPx;
@@ -3049,6 +3064,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 // Эмоции вне кластера — отдельными маркерами как есть
                 for (var se = 0; se < soloEmotions.length; se++) {
                     out.push({ lnglat: soloEmotions[se].geometry.coordinates, clusterId: String(soloEmotions[se].id), features: [soloEmotions[se]] });
+                }
+                // Оплаченные вне кластера — отдельными пинами как есть
+                for (var sp = 0; sp < soloPaid.length; sp++) {
+                    out.push({ lnglat: soloPaid[sp].geometry.coordinates, clusterId: String(soloPaid[sp].id), features: [soloPaid[sp]] });
                 }
                 Object.keys(groups).forEach(function (root) {
                     var group = groups[root];
