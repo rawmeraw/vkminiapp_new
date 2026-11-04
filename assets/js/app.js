@@ -1717,6 +1717,15 @@ function renderSliders(){
     els.timelineWrap.style.display='none';
     const top10Total = state.top10Pool.length;
     renderSlider(els.sliderTop10, els.top10Row, state.top10Pool, top10Total, 'top10', 'Топ-10');
+    // Город в заголовке слайдера для SEO и различения городов
+    try {
+      var c = cityBySlug(state.city);
+      var cityName = (c && c.genitive) ? c.genitive : (c && c.name ? c.name : state.city);
+      // Иваново не склоняется в этом случае
+      var displayName = state.city === 'ivanovo' ? ((c && c.name) || 'Иваново') : cityName;
+      var titleEl = document.getElementById('top10-title-text');
+      if (titleEl) titleEl.textContent = 'Топ-10 событий ' + displayName;
+    } catch (e) {}
     els.top10TitleLink.onclick=null;
     els.top10TitleLink.style.cursor='default';
     els.top10TitleLink.removeAttribute('href');
@@ -1949,7 +1958,15 @@ function renderTimeline(){
 }
 
 function getTimelineTitle(){
-  if(state.timelineMode==='top10') return 'Топ-10';
+  if(state.timelineMode==='top10'){
+    try {
+      var c = cityBySlug(state.city);
+      var cityName = (c && c.genitive) ? c.genitive : (c && c.name ? c.name : state.city);
+      var displayName = state.city === 'ivanovo' ? ((c && c.name) || 'Иваново') : cityName;
+      return 'Топ-10 событий ' + displayName;
+    } catch (e) {}
+    return 'Топ-10';
+  }
   if(state.timelineMode==='foryou') return 'Рекомендации для вас';
   if(state.timelineMode==='promo') return 'Промокоды на билеты';
   if(state.timelineMode==='free') return 'Бесплатные концерты';
