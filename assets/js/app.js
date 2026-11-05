@@ -2,7 +2,6 @@
 const API_BASE = 'https://permlive.ru';
 const bridge = window.vkBridge;
 try{ bridge && bridge.send('VKWebAppInit'); }catch(e){}
-// fix fetch for github.io -> permlive.ru for map-emotions (404 on rawmeraw.github.io/api/...)
 (function(){
   const origFetch = window.fetch.bind(window);
   window.fetch = function(input, init){
@@ -861,7 +860,6 @@ async function switchCity(slug, opts){
   renderSliderSkeletons();
   await loadData();
   try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('city paint failed', e); }
-  try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(e){}
   try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
   const _c = cityBySlug(slug);
   toast('Город: '+(_c ? _c.name : slug));
@@ -1271,12 +1269,11 @@ async function loadData(){
       // ME в коде карты — ссылка на этот же объект, мутируем поля, не заменяем.
       if(state.hasAccount){
         try{
-          if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
-            Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||vkName||'', avatar: state.vkAvatar||''});
+          if(window.PermLiveMapData && window.PermLiveMapData.mapUser){
+            Object.assign(window.PermLiveMapData.mapUser, {is_auth:true, name: state.vkShortName||state.vkName||vkName||'', avatar: state.vkAvatar||''});
           }
           window.PermLiveMapVk={vk_user_id: String(vkId), vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||vkName||'', vk_avatar: state.vkAvatar||''};
           // эмоции могли загрузиться раньше без vk_user_id (is_mine=false) — перечитать
-          try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err){}
         }catch(err){}
         if(window.vkBridge){
           try{
@@ -1286,8 +1283,8 @@ async function loadData(){
               state.vkName=[fn, ln].filter(Boolean).join(' ')||state.vkName;
               state.vkShortName= fn ? (ln ? `${fn} ${ln.charAt(0)}.` : fn) : state.vkName;
               state.vkAvatar=u.photo_100||u.photo_200||'';
-              if(window.PermLiveMapData && window.PermLiveMapData.emotionMe){
-                Object.assign(window.PermLiveMapData.emotionMe, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
+              if(window.PermLiveMapData && window.PermLiveMapData.mapUser){
+                Object.assign(window.PermLiveMapData.mapUser, {is_auth:true, name: state.vkShortName||state.vkName||'', avatar: state.vkAvatar||''});
               }
               const uid=String(u.id);
               if(window.PermLiveMapVk){
@@ -1295,11 +1292,9 @@ async function loadData(){
                 window.PermLiveMapVk.vk_avatar=state.vkAvatar||'';
                 if(window.PermLiveMapVk.vk_user_id!==uid){
                   window.PermLiveMapVk.vk_user_id=uid;
-                  try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err2){}
                 }
               }else{
                 window.PermLiveMapVk={vk_user_id: uid, vk_params: vkParams||state.vkParams||null, vk_name: state.vkShortName||state.vkName||'', vk_avatar: state.vkAvatar||''};
-                try{ if(window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(err2){}
               }
             }
           }catch(err){}
@@ -1327,7 +1322,6 @@ async function loadData(){
     try{ document.body.classList.toggle('vk-no-account', !state.hasAccount); }catch(e){}
     // vk_user_id уже выставлен раньше — перечитать эмоции, если карта успела
     // загрузить их без идентификатора (is_mine=false чинится одним refetch)
-    try{ if(state.vkUserId && window.PermLiveMaps && window.PermLiveMaps.refreshEmotions) window.PermLiveMaps.refreshEmotions(); }catch(e){}
   }catch(e){ console.warn('vk rec failed',e); }
   // если карта уже открыта — перерисовать маркеры с новыми данными
   try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
@@ -2219,6 +2213,9 @@ function ticketVendor(url){
   // ticket_vendor в /api/concert/<slug>/, см. ticketBtnHTML.
   const u = String(url||'').toLowerCase();
   const m = /erid=([^&\s]+)/.exec(u);
+  // afisha.ru/yyczo.com (Admitad) — до yandex-эвристики: их erid=5jtCe...
+  // тоже начинается с цифры и иначе ловился бы правилом «erid на цифру».
+  if(u.includes('afisha.ru') || u.includes('yyczo.com')) return 'afisha';
   if(u.includes('afisha.yandex.ru') || (m && /^\d/.test(m[1]))) return 'yandex';
   if(u.includes('cake.permlive.ru/go')) return 'mts';
   if(u.includes('ticketland.ru')) return 'ticketland';
@@ -2232,6 +2229,7 @@ function ticketBtnHTML(tickets, price, vendor){
   if(v==='yandex') return `<a class="detail-ticket detail-ticket--yandex" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/yandex_afisha.svg" alt="Яндекс.Афиша"><span>Есть билеты на Яндекс.Афише</span></a>`;
   if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Есть билеты на МТС Live</span></a>`;
   if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Есть билеты на Ticketland</span></a>`;
+  if(v==='afisha') return `<a class="detail-ticket detail-ticket--afisha" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/afisha.svg" alt="Афиша"><span>Есть билеты на Афише</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
 function yandexPromosHTML(c){
@@ -2684,7 +2682,6 @@ function refreshMapMarkers(){
       window.PermLiveMapData.events=evts;
       window.PermLiveMapData.today=state.todayISO;
       window.PermLiveMapData.defaultDate=state.selectedDate||state.todayISO;
-      window.PermLiveMapData.emotionDate=state.todayISO;
       window.__PermLiveMapCurrentDate = state.selectedDate||state.todayISO;
       // всегда вызываем setEvents — site кладёт events в state даже если карта ещё не готова,
       // иначе фильтр по дате применяется только после второго переключения

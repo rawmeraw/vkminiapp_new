@@ -387,11 +387,6 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .pl-tabbar__btn{font-family:'Jost',Arial,sans-serif}
 /* в минике нет /add/ — ссылка «полная форма» из композера propose ведёт в никуда */
 .pl-map-propose-composer .pl-map-propose-composer__hint a{display:none}
-/* keep emotions markers and toggle visible */
-.pl-map-emotion{display:flex !important}
-.pl-map-emotions-toggle{display:flex !important}
-/* аватарка в попапе эмоций как на сайте + имя-ссылка на VK */
-.pl-map-emotion-pop__user-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
 /* Detail page */
 .detail{max-width:640px;margin:0 auto;padding:0 0 32px}
@@ -425,8 +420,11 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail-ticket--yandex:hover{color:#000}
 .detail-ticket--mts{background:linear-gradient(135deg,#e30611,#ff1f2a);color:#fff}
 .detail-ticket--mts img{filter:brightness(0) invert(1)}
-.detail-ticket--ticketland{background:#fff;color:#1d1f24;box-shadow:0 4px 15px rgba(0,0,0,.35)}
-.detail-ticket--ticketland:hover{color:#1d1f24}
+.detail-ticket--ticketland{background:linear-gradient(135deg,#e30611,#ff1f2a);color:#fff;box-shadow:0 4px 15px rgba(227,6,17,.4)}
+.detail-ticket--ticketland img{filter:brightness(0) invert(1)}
+.detail-ticket--ticketland:hover{color:#fff}
+.detail-ticket--afisha{background:#B0154F;color:#fff;box-shadow:0 4px 15px rgba(176,21,79,.4)}
+.detail-ticket--afisha:hover{background:#8F0E3C;color:#fff}
 .detail-route--yandex{background:#fc0 !important;color:#000 !important;border-color:#fc0 !important}
 .detail__performers{margin-top:14px}
 .detail__performers h3{font-size:15px;margin:0 0 8px}

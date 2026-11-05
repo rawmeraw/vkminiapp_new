@@ -42,7 +42,7 @@
 
     // Цвета типов событий: hard — Рок и тяжёлое (оранжевый),
     // academic — Акустика и классика (олива), pop — Поп и электроника
-    // (электрик-синий), other — Прочее (серый). Эмоции — фиолетовый.
+    // (электрик-синий), other — Прочее (серый).
     var GENRE_COLORS = {
         'hard': '#f05a15',
         'academic': '#86992c',
@@ -57,10 +57,6 @@
         'pop': 'Поп и электроника',
         'other': 'Прочее'
     };
-
-    var EMOTION_COLOR = '#8b5cf6';
-
-    var EMOTION_LIFE_MS = 6 * 60 * 60 * 1000;
 
 var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) || [];
 
@@ -88,17 +84,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         clusterer: null,
         toastTimer: null,
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
-        emotions: [],
-        emotionsVisible: true,
         filters: { hard: true, academic: true, pop: true },
         modeFilter: 'all',
         filterBtns: {},
-        emotionPanels: [],
-        emotionTimer: null,
-        emotionAnchor: null,
-        composerScreen: null,
-
-        emotionAnchorCamera: null,
         flowerEl: null,
         flowerOverlayEl: null,
         flowerAnchor: null,
@@ -117,7 +105,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function genreColor(event) {
         var type = event.tags && event.tags[0] && event.tags[0].type;
         type = String(type || 'other').toLowerCase();
-        if (event.featureType === 'emotion') return EMOTION_COLOR;
         return GENRE_COLORS[type] || GENRE_COLORS.other;
     }
 
@@ -145,7 +132,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                     var fk = FILTER_TYPES[fi];
                     if (typeof data[fk] === 'boolean') state.filters[fk] = data[fk];
                 }
-                if (typeof data.emotions === 'boolean') state.emotionsVisible = data.emotions;
                 if (typeof data.mode === 'string' && (data.mode === 'all' || data.mode === 'free' || data.mode === 'foryou')) {
                     state.modeFilter = data.mode;
                 }
@@ -163,7 +149,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function saveFilterPrefs() {
         try {
             var data = {
-                emotions: !!state.emotionsVisible,
                 mode: state.modeFilter
             };
             for (var fi = 0; fi < FILTER_TYPES.length; fi++) {
@@ -252,16 +237,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         for (var k in state.filterBtns) {
             if (!state.filterBtns.hasOwnProperty(k)) continue;
             var btn = state.filterBtns[k];
-            var on = k === 'emotions' ? !!state.emotionsVisible : !!state.filters[k];
+            var on = !!state.filters[k];
             if (btn) {
                 btn.classList.toggle('is-active', on);
-                if (k === 'emotions') {
-                    btn.title = 'Эмоции на карте: ' + (on ? 'включены' : 'выключены');
-                } else {
-                    var label = GENRE_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1));
-                    btn.title = label + ': ' + (on ? 'показаны' : 'скрыты');
-                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-                }
+                var label = GENRE_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1));
+                btn.title = label + ': ' + (on ? 'показаны' : 'скрыты');
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
             }
         }
     }
@@ -283,7 +264,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (changed) { saveFilterPrefs(); syncFilterButtons(); }
         }
         for (var key in state.filterBtns) {
-            if (key === 'emotions') continue;
             var b = state.filterBtns[key];
             if (!b) continue;
             if (hideAllTypes) {
@@ -323,6 +303,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     loadFilterPrefs();
 
     var OUTLIER_KM = 10;
+
+    function miniCitySlug() {
+        try {
+            var d = window.PermLiveMapData || {};
+            if (d.citySlug) return String(d.citySlug);
+            if (typeof window.citySlugOf === 'function') return window.citySlugOf() || 'perm';
+        } catch (e) {}
+        return 'perm';
+    }
 
     function cityFallbackCenter() {
         // Центр текущего города мини-приложения (не Пермь для всех).
@@ -491,21 +480,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 properties: ev
             };
         });
-        if (state.emotionsVisible && isTodayView()) {
-            for (var i = 0; i < state.emotions.length; i++) {
-                var em = state.emotions[i];
-                features.push({
-                    type: 'Feature',
-                    id: 'em' + String(em.id),
-                    geometry: { type: 'Point', coordinates: em.coords },
-                    properties: {
-                        featureType: 'emotion',
-                        em: em,
-                        id: em.id
-                    }
-                });
-            }
-        }
         return features;
     }
 
@@ -514,15 +488,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             method: state.clusterMethod,
             features: buildClusterFeatures(),
             marker: function (feature) {
-                if (feature.properties && feature.properties.featureType === 'emotion') {
-                    var emEl = buildEmotionMarkerEl(feature.properties.em);
-                    var emMarker = new state.YMapMarker({ coordinates: feature.geometry.coordinates, zIndex: markerZIndex(feature.geometry.coordinates) + 50000 }, emEl);
-                    emEl._ymarker = emMarker;
-                    emEl._lnglat = feature.geometry.coordinates;
-                    emEl.addEventListener('mouseenter', function () { setMarkerZIndex(emMarker, feature.geometry.coordinates, true); });
-                    emEl.addEventListener('mouseleave', function () { setMarkerZIndex(emMarker, feature.geometry.coordinates, false); });
-                    return emMarker;
-                }
                 var pin = buildPin(feature.properties);
                 // Начавшиеся (15+ мин от старта) — всегда ПОД неначавшими
                 // (базовый zIndex от координат ~4.7e5, поэтому -1e6 reliably гасит),
@@ -730,123 +695,25 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<div class="pl-map-balloon__venue-main">' + name + addr + '</div></div>';
     }
 
-    function clusterEmotionsHtml(emotionFeats) {
-        if (!emotionFeats || !emotionFeats.length) return '';
-        return '<div class="pl-map-balloon__cluster-emotions">' + emotionFeats.map(function (f) {
-            var em = f.properties.em;
-            return '<button type="button" class="pl-map-balloon__cluster-emotion" data-emoid="' +
-                escapeAttr(em.id) + '">' + escapeHtml(em.emoji) + ' <span>' +
-                escapeHtml(em.user || 'Пользователь') + '</span></button>';
-        }).join('') + '</div>';
-    }
-
-    function clusterBodyHtml(groups, activeIdx) {
-        if (!groups.length) return { html: '', isTabbed: false };
-        if (groups.length === 1) {
-            var only = groups[0];
-            return {
-                html: venueHeadHtml(only) + only.feats.map(function (f) {
-                    return clusterItemHtml(f.properties);
-                }).join(''),
-                isTabbed: false
-            };
-        }
-        var tabsHtml = '<div class="pl-map-balloon__tabs" role="tablist">' + groups.map(function (gr, idx) {
-            return '<button type="button" role="tab" class="pl-map-balloon__tab' +
-                (idx === activeIdx ? ' pl-map-balloon__tab--active' : '') + '" data-tab="' + idx + '"' +
-                ' aria-selected="' + (idx === activeIdx ? 'true' : 'false') + '"' +
-                ' title="' + escapeAttr(gr.place) + '">' +
-                '<span class="pl-map-balloon__tab-name">' + escapeHtml(gr.place) + '</span>' +
-                '<span class="pl-map-balloon__tab-count">' + gr.feats.length + '</span></button>';
-        }).join('') + '</div>';
-        var panelsHtml = '<div class="pl-map-balloon__tabpanels">' + groups.map(function (gr, idx) {
-            var list = gr.feats.map(function (f) {
-                return clusterItemHtml(f.properties);
-            }).join('');
-            return '<div class="pl-map-balloon__tabpanel' +
-                (idx === activeIdx ? ' pl-map-balloon__tabpanel--active' : '') + '" role="tabpanel" data-panel="' + idx + '">' +
-                venueHeadHtml(gr) + list + '</div>';
-        }).join('') + '</div>';
-        return { html: tabsHtml + panelsHtml, isTabbed: true };
-    }
-
-    function bindClusterTabs() {
-        var tabs = state.balloonEl.querySelectorAll('.pl-map-balloon__tab');
-        var panels = state.balloonEl.querySelectorAll('.pl-map-balloon__tabpanel');
-        if (!tabs.length) return;
-        var selectTab = function (idx) {
-            for (var ti = 0; ti < tabs.length; ti++) {
-                var on = ti === idx;
-                tabs[ti].classList.toggle('pl-map-balloon__tab--active', on);
-                tabs[ti].setAttribute('aria-selected', on ? 'true' : 'false');
-            }
-            for (var pi = 0; pi < panels.length; pi++) {
-                panels[pi].classList.toggle('pl-map-balloon__tabpanel--active', pi === idx);
-            }
-            try { state.balloonEl.scrollTop = 0; } catch (e) {}
-            try {
-                if (tabs[idx] && tabs[idx].scrollIntoView) {
-                    tabs[idx].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-                }
-            } catch (e) {}
-        };
-        for (var ti = 0; ti < tabs.length; ti++) {
-            (function (idx) {
-                tabs[idx].addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    selectTab(idx);
-                });
-            })(ti);
-        }
-    }
-
-    function bindClusterEmotions(anchorEl) {
-        var emoItems = state.balloonEl.querySelectorAll('.pl-map-balloon__cluster-emotion');
-        for (var e = 0; e < emoItems.length; e++) {
-            emoItems[e].addEventListener('click', function () {
-                var id = this.getAttribute('data-emoid');
-                var em = null;
-                for (var j = 0; j < state.emotions.length; j++) {
-                    if (String(state.emotions[j].id) === String(id)) {
-                        em = state.emotions[j];
-                        break;
-                    }
-                }
-                if (!em) return;
-                closeBalloon();
-                openEmotionPop(em, anchorEl);
-            });
-        }
-    }
-
-    function fillClusterBalloon(bodyHtml, emotionsHtml, isTabbed, anchorEl) {
+    function fillClusterBalloon(bodyHtml, isTabbed) {
         state.balloonEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
-            bodyHtml + emotionsHtml;
+            bodyHtml;
         state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
         state.balloonEl.classList.toggle('pl-map-balloon--tabs', isTabbed);
         try { state.balloonEl.scrollTop = 0; } catch (e) {}
         setBalloonActive(null);
         updateBalloonPosition();
         if (isTabbed) bindClusterTabs();
-        bindClusterEmotions(anchorEl);
     }
 
     function openClusterList(features, clusterEl) {
-        if (emotionOpenId) hideEmotionPop();
         state.balloonOpenId = 'cluster';
         state.activePinEl = clusterEl;
 
-        var eventsFeats = features.filter(function (f) {
-            return !(f.properties && f.properties.featureType === 'emotion');
-        });
-        var emotionFeats = features.filter(function (f) {
-            return f.properties && f.properties.featureType === 'emotion';
-        });
-
-        var groups = groupClusterByPlace(eventsFeats);
+        var groups = groupClusterByPlace(features);
         var body = clusterBodyHtml(groups, 0);
-        fillClusterBalloon(body.html, clusterEmotionsHtml(emotionFeats), body.isTabbed, clusterEl);
+        fillClusterBalloon(body.html, body.isTabbed);
     }
 
     // Тап по пину: если рядом (в радиусе) есть события РАЗНЫХ заведений —
@@ -873,21 +740,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (groups[g].key === ckey) { activeIdx = g; break; }
         }
 
-        var emotionFeats = [];
-        if (state.emotionsVisible && isTodayView()) {
-            for (var k = 0; k < state.emotions.length; k++) {
-                var em = state.emotions[k];
-                if (em && em.coords && coordsDistanceM(centerEvent.coordinates, em.coords) <= PIN_NEARBY_M) {
-                    emotionFeats.push({ properties: { featureType: 'emotion', em: em } });
-                }
-            }
-        }
-
-        if (emotionOpenId) hideEmotionPop();
         state.balloonOpenId = 'cluster';
         state.activePinEl = pinEl;
         var body = clusterBodyHtml(groups, activeIdx);
-        fillClusterBalloon(body.html, clusterEmotionsHtml(emotionFeats), body.isTabbed, pinEl);
+        fillClusterBalloon(body.html, body.isTabbed);
         return true;
     }
 
@@ -966,7 +822,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function openBalloon(event, pinEl) {
-        if (emotionOpenId) hideEmotionPop();
         state.balloonOpenId = event.id;
 
         var livePin = (pinEl && pinEl.isConnected) ? pinEl : null;
@@ -1124,776 +979,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return escapeHtml(str);
     }
 
-    var EMOTION_EMOJIS = [
-        { e: '😊', label: 'Радость' },
-        { e: '😆', label: 'Смешно' },
-        { e: '🤔', label: 'Думаю' },
-        { e: '😍', label: 'Красота' },
-        { e: '😡', label: 'Злюсь' },
-        { e: '😢', label: 'Грустно' }
-    ];
-
     var FLOWER_ITEMS = [
-        { id: 'emotion', label: 'Оставить эмоцию', icon: '🙂', cls: 'pl-map-flower__petal--emotion' },
         { id: 'propose', label: 'Предложить событие', icon: '＋', cls: 'pl-map-flower__petal--propose' }
     ];
-    var ME = (window.PermLiveMapData && window.PermLiveMapData.emotionMe) || { is_auth: false, name: '', avatar: '', is_staff: false };
-
-    function relativeTime(createdIso) {
-        if (!createdIso) return '';
-        var t = new Date(createdIso);
-        if (isNaN(t.getTime())) return '';
-        var minutes = Math.floor((Date.now() - t.getTime()) / 60000);
-        if (minutes < 5) return 'только что';
-        var plural = function (n, one, few, many) {
-            var m10 = n % 10, m100 = n % 100;
-            if (m10 === 1 && m100 !== 11) return one;
-            if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-            return many;
-        };
-        if (minutes < 60) {
-            return 'добавлена ' + minutes + ' ' + plural(minutes, 'минуту', 'минуты', 'минут') + ' назад';
-        }
-        var hours = Math.floor(minutes / 60);
-        if (hours < 24) {
-            return 'добавлена ' + hours + ' ' + plural(hours, 'час', 'часа', 'часов') + ' назад';
-        }
-        var days = Math.floor(hours / 24);
-        return 'добавлена ' + days + ' ' + plural(days, 'день', 'дня', 'дней') + ' назад';
-    }
-    var emotionSelected = null;
-    var emotionComposerEl = null;
-    var emotionOverlayEl = null;
-    var emotionPopEl = null;
-    var emotionOpenId = null;
-
-    var emotionToggleBtn = null;
-
-    function currentDateStr() {
-        return window.__PermLiveMapCurrentDate ||
-            (window.PermLiveMapData && window.PermLiveMapData.defaultDate) ||
-            (window.PermLiveMapData && window.PermLiveMapData.today) || '';
-    }
-
-    function getEmotionDate() {
-        return (window.PermLiveMapData && window.PermLiveMapData.emotionDate) ||
-               (window.PermLiveMapData && window.PermLiveMapData.today) || '';
-    }
-
-    function isTodayView() {
-        var ed = getEmotionDate();
-        return !!ed && currentDateStr() === ed;
-    }
-
-    var emotionSeq = 0;
-
-    function miniCitySlug() {
-        /* Миник пока одногородный (Пермь), но эмоции уже per-city на бэке:
-           тянем только свой город, иначе московская эмоция блокирует пермскую. */
-        try {
-            var d = window.PermLiveMapData || {};
-            if (d.citySlug) return String(d.citySlug);
-            if (typeof window.citySlugOf === 'function') return window.citySlugOf() || 'perm';
-        } catch (e) {}
-        return 'perm';
-    }
-
-    function fetchEmotions() {
-        var mySeq = ++emotionSeq;
-        var slug = miniCitySlug();
-        var emoUrl = '/api/map-emotions/?city=' + encodeURIComponent(slug);
-        /* VKMINI: для миника добавляем vk_user_id, чтобы backend отдал корректный is_mine */
-        try {
-            var vkctx = window.PermLiveMapVk;
-            if (vkctx && vkctx.vk_user_id) emoUrl += '&vk_user_id=' + encodeURIComponent(vkctx.vk_user_id);
-        } catch (e) {}
-        fetch(emoUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (mySeq !== emotionSeq) return;
-                if (!data || !data.emotions) return;
-                var list = data.emotions;
-                try {
-                    list = list.filter(function (em) {
-                        return !em.city_slug || em.city_slug === slug;
-                    });
-                } catch (e2) {}
-                state.emotions = list;
-                applyEmotionLayer();
-            })
-            .catch(function () {});
-    }
-
-    function addEmotion(em) {
-        if (!em) return;
-        /* Ответы GET, ушедших до создания эмоции, устарели — игнорируем их,
-           иначе свежая эмоция (is_mine) затрется списком без неё. */
-        emotionSeq++;
-        em.is_mine = true;
-        try {
-            var cur = miniCitySlug();
-            if (em.city_slug && em.city_slug !== cur) {
-                for (var k = 0; k < state.emotions.length; k++) {
-                    if (String(state.emotions[k].id) === String(em.id)) {
-                        state.emotions.splice(k, 1);
-                        break;
-                    }
-                }
-                applyEmotionLayer();
-                return;
-            }
-        } catch (e) {}
-        var replaced = false;
-        for (var i = 0; i < state.emotions.length; i++) {
-            if (String(state.emotions[i].id) === String(em.id)) {
-                state.emotions[i] = em;
-                replaced = true;
-                break;
-            }
-        }
-        if (!replaced) state.emotions.push(em);
-        applyEmotionLayer();
-    }
-
-    function emotionLife(em) {
-        var end = em.expires_at ? Date.parse(em.expires_at) : NaN;
-        if (isNaN(end)) return 1;
-        return Math.max(0, Math.min(1, (end - Date.now()) / EMOTION_LIFE_MS));
-    }
-
-    function emotionLikesCount(em) {
-        var n = parseInt(em && (em.likes_count || 0), 10);
-        return isNaN(n) || n < 0 ? 0 : n;
-    }
-
-    function emotionRepliesCount(em) {
-        var n = parseInt(em && (em.replies_count || 0), 10);
-        return isNaN(n) || n < 0 ? 0 : n;
-    }
-
-    function vkCtx() {
-        try { return window.PermLiveMapVk || null; } catch (e) { return null; }
-    }
-
-    function vkHasAccount() {
-        /* ME.is_auth выставляет app.js только для привязанных (has_user=true) */
-        return !!(ME && ME.is_auth);
-    }
-
-    function vkReplyPayloadExtra() {
-        var v = vkCtx() || {};
-        var out = {};
-        if (v.vk_user_id) out.vk_user_id = v.vk_user_id;
-        if (v.vk_params) out.vk_params = v.vk_params;
-        return out;
-    }
-
-    function emotionMarkerSize(em) {
-        return 40 + Math.min(emotionLikesCount(em), 10) * 3;
-    }
-
-    function emotionEmojiSize(em) {
-        return 20 + Math.min(emotionLikesCount(em), 10) * 1.5;
-    }
-
-    function applyEmotionSize(markerEl, em) {
-        if (!markerEl || !em) return;
-        var s = emotionMarkerSize(em);
-        markerEl.style.width = s + 'px';
-        markerEl.style.height = s + 'px';
-        var emojiEl = markerEl.querySelector('.pl-map-emotion__emoji');
-        if (emojiEl) emojiEl.style.fontSize = emotionEmojiSize(em) + 'px';
-        var badge = markerEl.querySelector('.pl-map-emotion__likes-badge');
-        var n = emotionLikesCount(em);
-        if (n > 0) {
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'pl-map-emotion__likes-badge';
-                markerEl.appendChild(badge);
-            }
-            badge.textContent = '❤ ' + n;
-            badge.style.display = '';
-        } else if (badge) {
-            badge.style.display = 'none';
-        }
-        var rbadge = markerEl.querySelector('.pl-map-emotion__replies-badge');
-        var rn = emotionRepliesCount(em);
-        if (rn > 0) {
-            if (!rbadge) {
-                rbadge = document.createElement('span');
-                rbadge.className = 'pl-map-emotion__replies-badge';
-                markerEl.appendChild(rbadge);
-            }
-            rbadge.textContent = '💬 ' + rn;
-            rbadge.style.display = '';
-        } else if (rbadge) {
-            rbadge.style.display = 'none';
-        }
-    }
-
-    function refreshRepliesCountUI(em) {
-        var markerEl = findEmotionEl(em.id);
-        if (markerEl) applyEmotionSize(markerEl, em);
-        if (emotionPopEl && emotionOpenId === em.id) {
-            var pill = emotionPopEl.querySelector('.pl-map-emotion-pop__replies-count');
-            if (pill) {
-                var cntBtn = pill.querySelector('span');
-                if (cntBtn) cntBtn.textContent = emotionRepliesCount(em);
-                pill.classList.toggle('has-replies', emotionRepliesCount(em) > 0);
-            }
-        }
-    }
-
-    function findEmotionEl(id) {
-        if (!state.mapEl) return null;
-        return state.mapEl.querySelector('.pl-map-emotion[data-id="em' + id + '"]');
-    }
-
-    function buildEmotionMarkerEl(em) {
-        var markerEl = el('button', 'pl-map-emotion',
-            '<span class="pl-map-emotion__emoji" aria-hidden="true">' + escapeHtml(em.emoji) + '</span>');
-        markerEl.type = 'button';
-        markerEl.setAttribute('data-id', 'em' + String(em.id));
-        markerEl.title = (em.user || '') + (em.text ? ': ' + em.text : '');
-        markerEl.setAttribute('aria-label', (em.user || 'Пользователь') + (em.text ? ': ' + em.text : ''));
-        markerEl.__em = em;
-        if (em.is_mine) {
-            markerEl.classList.add('pl-map-emotion--mine');
-            markerEl.appendChild(el('span', 'pl-map-emotion__mine-badge', 'Вы'));
-        } else if (em.user) {
-            markerEl.appendChild(el('span', 'pl-map-emotion__user-label', escapeHtml(em.user)));
-        }
-        markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
-        applyEmotionSize(markerEl, em);
-        return markerEl;
-    }
-
-    function myActiveEmotion() {
-        var cur = miniCitySlug();
-        for (var i = 0; i < state.emotions.length; i++) {
-            var em = state.emotions[i];
-            if (!em || !em.is_mine) continue;
-            if (em.city_slug && em.city_slug !== cur) continue;
-            return em;
-        }
-        return null;
-    }
-
-    function setEmotionsVisible(on) {
-        state.emotionsVisible = on;
-        saveFilterPrefs();
-        syncFilterButtons();
-        applyEmotionLayer();
-    }
-
-    function applyEmotionLayer(skipUpdate) {
-        if (!state.map) return;
-        var allowed = isTodayView();
-        if (emotionToggleBtn) {
-            emotionToggleBtn.style.display = allowed ? '' : 'none';
-        }
-        hideEmotionPop();
-        if (!skipUpdate) updateClustererFeatures();
-        if (allowed && state.emotionsVisible && state.emotions.length) startEmotionTimer();
-        else stopEmotionTimer();
-    }
-
-    function removeEmotionMarker(id) {
-        var before = state.emotions.length;
-        state.emotions = state.emotions.filter(function (e) { return String(e.id) !== String(id); });
-        if (before !== state.emotions.length) {
-            if (String(emotionOpenId) === String(id)) hideEmotionPop();
-            applyEmotionLayer();
-        }
-    }
-
-    function startEmotionTimer() {
-        if (state.emotionTimer) return;
-        state.emotionTimer = setInterval(emotionTick, 30000);
-        emotionTick();
-    }
-
-    function stopEmotionTimer() {
-        if (state.emotionTimer) {
-            clearInterval(state.emotionTimer);
-            state.emotionTimer = null;
-        }
-    }
-
-    function emotionTick() {
-        if (!state.map) return;
-        var any = false;
-        for (var i = 0; i < state.emotions.length; i++) {
-            var em = state.emotions[i];
-            if (!em) continue;
-            var life = emotionLife(em);
-            if (life <= 0) {
-                removeEmotionMarker(em.id);
-                continue;
-            }
-            any = true;
-
-            var liveEl = findEmotionEl(em.id);
-            if (liveEl) liveEl.style.setProperty('--em-life', life.toFixed(3));
-        }
-        if (!any && !state.emotions.length) stopEmotionTimer();
-    }
-
-    function openEmotionPop(em, markerEl) {
-        if (state.balloonOpenId) closeBalloon();
-        if (emotionPopEl && emotionPopEl.parentNode) emotionPopEl.parentNode.removeChild(emotionPopEl);
-        emotionPopEl = el('div', 'pl-map-balloon pl-map-emotion-pop');
-        var pop = emotionPopEl;
-        pop.addEventListener('click', function (e) {
-            var t = e.target;
-            if (!t || !t.classList) return;
-            var likeBtn = t.closest ? t.closest('.pl-map-emotion-pop__like') : null;
-            if (likeBtn) {
-                toggleEmotionLike(pop.__em, likeBtn);
-                return;
-            }
-            var repliesBtn = t.closest ? t.closest('.pl-map-emotion-pop__replies-count') : null;
-            if (repliesBtn) {
-                var box0 = pop.querySelector('[data-replies]');
-                if (box0 && box0.scrollIntoView) { try { box0.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (err) {} }
-                var inp0 = pop.querySelector('.pl-map-reply__input');
-                if (inp0) { try { inp0.focus({ preventScroll: true }); } catch (err2) { try { inp0.focus(); } catch (err3) {} } }
-                return;
-            }
-            if (t.classList.contains('pl-map-balloon__close')) hideEmotionPop();
-            else if (t.classList.contains('pl-map-emotion-pop__delete')) {
-
-                hideEmotionPop();
-                if (pop.__em) deleteEmotion(pop.__em);
-                return;
-            }
-            var novkBtn = t.closest ? t.closest('[data-reply-novk]') : null;
-            if (novkBtn) {
-                showToast('Привяжите VK-аккаунт на сайте permlive.ru, чтобы писать комментарии');
-                return;
-            }
-            var sendBtn = t.closest ? t.closest('[data-reply-send]') : null;
-            if (sendBtn) { sendEmotionReply(pop); return; }
-            var editBtn = t.closest ? t.closest('[data-reply-edit]') : null;
-            if (editBtn) {
-                startReplyEdit(pop, editBtn.getAttribute('data-reply-edit'));
-                return;
-            }
-            var saveBtn = t.closest ? t.closest('[data-reply-save]') : null;
-            if (saveBtn) {
-                saveReplyEdit(pop, saveBtn.getAttribute('data-reply-save'));
-                return;
-            }
-            var cancelBtn = t.closest ? t.closest('[data-reply-cancel]') : null;
-            if (cancelBtn) { renderEmotionReplies(pop.__em); return; }
-            var delBtn2 = t.closest ? t.closest('[data-reply-del]') : null;
-            if (delBtn2) {
-                deleteEmotionReply(pop, delBtn2.getAttribute('data-reply-del'));
-                return;
-            }
-        });
-        pop.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                var inp = e.target && e.target.classList && e.target.classList.contains('pl-map-reply__input') ? e.target : null;
-                if (inp) { e.preventDefault(); sendEmotionReply(pop); }
-                var editInp = e.target && e.target.classList && e.target.classList.contains('pl-map-reply__edit-input') ? e.target : null;
-                if (editInp) {
-                    e.preventDefault();
-                    saveReplyEdit(pop, editInp.getAttribute('data-edit-id'));
-                }
-            }
-        });
-        state.mapEl.appendChild(pop);
-        pop.__em = em;
-        var avatar = em.avatar
-            ? '<img class="pl-map-emotion-pop__avatar-img" src="' + escapeAttr(em.avatar) + '" alt="">'
-            : '<span class="pl-map-emotion-pop__avatar-letter">' + escapeHtml(String(em.user || '?').charAt(0).toUpperCase()) + '</span>';
-
-        var canDelete = !!(em.is_mine || ME.is_staff);
-        var delBtn = canDelete
-            ? '<button type="button" class="pl-map-emotion-pop__delete">Удалить эмоцию</button>'
-            : '';
-        /* VKMINI: имя — ссылкой на страницу VK, если backend отдал vk_uid */
-        var userHtml = '<span class="pl-map-emotion-pop__user">' + escapeHtml(em.user || 'Пользователь') + '</span>';
-        try{
-            if(em.vk_uid){
-                var vku = String(em.vk_uid).replace(/^-/, '');
-                userHtml = '<a class="pl-map-emotion-pop__user pl-map-emotion-pop__user-link" href="https://vk.com/id' + encodeURIComponent(vku) + '" target="_blank" rel="noopener">' + escapeHtml(em.user || 'Пользователь') + '</a>';
-            }
-        }catch(e){}
-        var likesN = emotionLikesCount(em);
-        var repliesN = emotionRepliesCount(em);
-        var repliesCls = repliesN > 0 ? ' has-replies' : '';
-        var formHtml = vkHasAccount()
-            ? '<div class="pl-map-reply__form"><input type="text" class="pl-map-reply__input" maxlength="120" placeholder="Ответить…" autocomplete="off">' +
-              '<button type="button" class="pl-map-reply__send" data-reply-send aria-label="Отправить">↑</button></div>'
-            : '<button type="button" class="pl-map-reply__login" data-reply-novk>Привяжите VK на сайте, чтобы ответить</button>';
-        emotionPopEl.innerHTML =
-            '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
-            '<div class="pl-map-emotion-pop__top">' +
-            '<div class="pl-map-emotion-pop__avatar">' + avatar + '</div>' +
-            '<div><span class="pl-map-emotion-pop__emoji" aria-hidden="true">' + escapeHtml(em.emoji) + '</span>' +
-            userHtml + '</div>' +
-            '</div>' +
-            (em.text ? '<p class="pl-map-emotion-pop__text">' + escapeHtml(em.text) + '</p>' : '') +
-            '<p class="pl-map-emotion-pop__meta">' + relativeTime(em.created_at) + '</p>' +
-            '<div class="pl-map-emotion-pop__actions">' +
-            '<button type="button" class="pl-map-emotion-pop__like' + (em.liked ? ' is-liked' : '') + '" aria-label="Поставить лайк">' +
-            '<i class="fa-solid fa-heart" aria-hidden="true"></i>' +
-            '<span class="pl-map-emotion-pop__like-count">' + likesN + '</span></button>' +
-            '<button type="button" class="pl-map-emotion-pop__replies-count' + repliesCls + '" title="Ответы" aria-label="Ответы">' +
-            '<i class="fa-solid fa-comment" aria-hidden="true"></i> <span>' + repliesN + '</span></button>' +
-            '</div>' +
-            '<div class="pl-map-replies" data-replies><p class="pl-map-replies__loading">Загружаем ответы…</p></div>' +
-            formHtml +
-            delBtn;
-        emotionPopEl.classList.add('pl-map-balloon--open');
-        attachSwipeClose(emotionPopEl, hideEmotionPop);
-        positionEmotionPop(markerEl);
-        emotionOpenId = em.id;
-        fetchEmotionReplies(em);
-    }
-
-    function replyAvatarHtml(r) {
-        if (r.avatar) return '<img class="pl-map-reply__avatar-img" src="' + escapeAttr(r.avatar) + '" alt="" loading="lazy">';
-        return '<span class="pl-map-reply__avatar-letter">' + escapeHtml(String(r.user || '?').charAt(0).toUpperCase()) + '</span>';
-    }
-
-    function renderEmotionReplies(em) {
-        if (!emotionPopEl || emotionOpenId !== em.id) return;
-        var box = emotionPopEl.querySelector('[data-replies]');
-        if (!box) return;
-        var list = em.replies || [];
-        if (!list.length) {
-            box.innerHTML = '<p class="pl-map-replies__empty">Пока нет ответов — станьте первым</p>';
-            return;
-        }
-        box.innerHTML = list.map(function (r) {
-            var mine = r.is_mine ? ' pl-map-reply--mine' : '';
-            var edited = r.is_edited ? '<span class="pl-map-reply__edited"> · изм.</span>' : '';
-            var tools = r.can_edit
-                ? '<span class="pl-map-reply__tools"><button type="button" data-reply-edit="' + r.id + '" title="Редактировать" aria-label="Редактировать">✎</button>' +
-                  '<button type="button" data-reply-del="' + r.id + '" title="Удалить" aria-label="Удалить">🗑</button></span>'
-                : '';
-            if (r._editing) {
-                return '<div class="pl-map-reply' + mine + '" data-reply="' + r.id + '">' +
-                    '<div class="pl-map-reply__avatar">' + replyAvatarHtml(r) + '</div>' +
-                    '<div class="pl-map-reply__body"><input type="text" class="pl-map-reply__edit-input" data-edit-id="' + r.id + '" maxlength="120" value="' + escapeAttr(r.text) + '">' +
-                    '<span class="pl-map-reply__edit-btns"><button type="button" data-reply-save="' + r.id + '">Сохранить</button>' +
-                    '<button type="button" data-reply-cancel>Отмена</button></span></div></div>';
-            }
-            return '<div class="pl-map-reply' + mine + '" data-reply="' + r.id + '">' +
-                '<div class="pl-map-reply__avatar">' + replyAvatarHtml(r) + '</div>' +
-                '<div class="pl-map-reply__body"><div class="pl-map-reply__head"><span class="pl-map-reply__user">' + escapeHtml(r.user || 'Пользователь') + '</span>' + tools + '</div>' +
-                '<p class="pl-map-reply__text">' + escapeHtml(r.text) + '</p>' +
-                '<span class="pl-map-reply__meta">' + relativeTime(r.created_at) + edited + '</span></div></div>';
-        }).join('');
-        try { box.scrollTop = box.scrollHeight; } catch (e) {}
-    }
-
-    function vkRepliesUrl(em, afterId) {
-        var url = '/api/vk/emotion/' + String(em.id) + '/replies/';
-        var v = vkCtx();
-        var qs = [];
-        if (v && v.vk_user_id) qs.push('vk_user_id=' + encodeURIComponent(v.vk_user_id));
-        if (afterId) qs.push('after_id=' + encodeURIComponent(afterId));
-        if (qs.length) url += '?' + qs.join('&');
-        return url;
-    }
-
-    function fetchEmotionReplies(em) {
-        fetch(vkRepliesUrl(em, 0), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
-        }).then(function (res) {
-            if (!res.ok || !res.d) return;
-            if (emotionOpenId !== em.id) return;
-            em.replies = res.d.replies || [];
-            em.replies_count = (typeof res.d.replies_count !== 'undefined') ? res.d.replies_count : em.replies.length;
-            renderEmotionReplies(em);
-            refreshRepliesCountUI(em);
-        }).catch(function () {
-            if (!emotionPopEl || emotionOpenId !== em.id) return;
-            var box = emotionPopEl.querySelector('[data-replies]');
-            if (box) box.innerHTML = '<p class="pl-map-replies__empty">Не удалось загрузить ответы</p>';
-        });
-    }
-
-    function sendEmotionReply(pop) {
-        var em = pop.__em;
-        if (!em) return;
-        var v = vkCtx();
-        if (!v || !v.vk_user_id || !vkHasAccount()) {
-            showToast('Привяжите VK-аккаунт на сайте permlive.ru, чтобы писать комментарии');
-            return;
-        }
-        var input = pop.querySelector('.pl-map-reply__input');
-        var sendBtn = pop.querySelector('[data-reply-send]');
-        var text = input ? input.value.trim().slice(0, 120) : '';
-        if (!text) { if (input) input.focus(); return; }
-        if (sendBtn) sendBtn.disabled = true;
-        var body = vkReplyPayloadExtra();
-        body.text = text;
-        fetch('/api/vk/emotion/' + String(em.id) + '/replies/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Не удалось отправить');
-                return;
-            }
-            em.replies = (em.replies || []).concat([res.d]);
-            em.replies_count = (typeof res.d.replies_count !== 'undefined') ? res.d.replies_count : em.replies.length;
-            if (input) input.value = '';
-            renderEmotionReplies(em);
-            refreshRepliesCountUI(em);
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        }).then(function () {
-            if (sendBtn) sendBtn.disabled = false;
-        });
-    }
-
-    function startReplyEdit(pop, replyId) {
-        var em = pop.__em;
-        if (!em || !em.replies) return;
-        for (var i = 0; i < em.replies.length; i++) em.replies[i]._editing = String(em.replies[i].id) === String(replyId);
-        renderEmotionReplies(em);
-        var inp = pop.querySelector('.pl-map-reply__edit-input');
-        if (inp) { try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { try { inp.focus(); } catch (e2) {} } }
-    }
-
-    function saveReplyEdit(pop, replyId) {
-        var em = pop.__em;
-        if (!em) return;
-        var v = vkCtx();
-        if (!v || !v.vk_user_id || !vkHasAccount()) {
-            showToast('Привяжите VK-аккаунт на сайте permlive.ru');
-            return;
-        }
-        var inp = pop.querySelector('.pl-map-reply__edit-input[data-edit-id="' + String(replyId).replace(/"/g, '') + '"]');
-        var text = inp ? inp.value.trim().slice(0, 120) : '';
-        if (!text) { showToast('Напишите ответ'); return; }
-        var body = vkReplyPayloadExtra();
-        body.text = text;
-        fetch('/api/vk/emotion-replies/' + String(replyId) + '/', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Не удалось сохранить');
-                return;
-            }
-            for (var i = 0; i < em.replies.length; i++) {
-                if (String(em.replies[i].id) === String(replyId)) { em.replies[i] = res.d; break; }
-            }
-            if (typeof res.d.replies_count !== 'undefined') em.replies_count = res.d.replies_count;
-            renderEmotionReplies(em);
-            refreshRepliesCountUI(em);
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        });
-    }
-
-    function deleteEmotionReply(pop, replyId) {
-        var em = pop.__em;
-        if (!em) return;
-        var v = vkCtx();
-        if (!v || !v.vk_user_id || !vkHasAccount()) {
-            showToast('Привяжите VK-аккаунт на сайте permlive.ru');
-            return;
-        }
-        fetch('/api/vk/emotion-replies/' + String(replyId) + '/', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify(vkReplyPayloadExtra())
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Не удалось удалить');
-                return;
-            }
-            em.replies = (em.replies || []).filter(function (x) { return String(x.id) !== String(replyId); });
-            if (typeof res.d.replies_count !== 'undefined') em.replies_count = res.d.replies_count;
-            else em.replies_count = em.replies.length;
-            renderEmotionReplies(em);
-            refreshRepliesCountUI(em);
-            showToast('Ответ удалён');
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        });
-    }
-
-    function refreshEmotionLikeUI(em) {
-        var markerEl = findEmotionEl(em.id);
-        if (markerEl) {
-            applyEmotionSize(markerEl, em);
-            markerEl.style.setProperty('--em-life', emotionLife(em).toFixed(3));
-        }
-        if (emotionPopEl && emotionOpenId === em.id) {
-            var btn = emotionPopEl.querySelector('.pl-map-emotion-pop__like');
-            if (btn) {
-                btn.classList.toggle('is-liked', !!em.liked);
-                var cnt = btn.querySelector('.pl-map-emotion-pop__like-count');
-                if (cnt) cnt.textContent = emotionLikesCount(em);
-            }
-        }
-    }
-
-    function toggleEmotionLike(em, btn) {
-        if (!em) return;
-        /* VKMINI: лайк через VK-эндпоинт */
-        try {
-            var vkd = window.PermLiveMapVk;
-            if (vkd && vkd.vk_user_id) {
-                if (btn) btn.disabled = true;
-                fetch('/api/vk/emotion/' + String(em.id) + '/like/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ vk_user_id: vkd.vk_user_id, vk_params: vkd.vk_params || undefined })
-                }).then(function (r) {
-                    return r.json().then(function (d) { return { ok: r.ok, d: d }; });
-                }).then(function (res) {
-                    if (!res.ok) {
-                        showToast((res.d && res.d.error) || 'Не удалось поставить лайк');
-                        return;
-                    }
-                    em.liked = !!res.d.liked;
-                    em.likes_count = res.d.likes_count || 0;
-                    if (res.d.expires_at) em.expires_at = res.d.expires_at;
-                    refreshEmotionLikeUI(em);
-                    if (btn && em.liked) {
-                        btn.classList.remove('liked-burst');
-                        void btn.offsetWidth;
-                        btn.classList.add('liked-burst');
-                        setTimeout(function () { btn.classList.remove('liked-burst'); }, 400);
-                    }
-                    if (em.liked) showToast('Эмоция продлена на час');
-                }).catch(function () {
-                    showToast('Сеть недоступна, попробуйте ещё раз');
-                }).then(function () {
-                    if (btn) btn.disabled = false;
-                });
-                return;
-            }
-        } catch (e) {}
-        if (!ME.is_auth) {
-            showToast('Войдите в профиль, чтобы ставить лайки');
-            return;
-        }
-        if (btn) btn.disabled = true;
-        fetch('/api/map-emotions/' + String(em.id) + '/like/', {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': (window.PermLiveMapData && window.PermLiveMapData.csrf) || ''
-            }
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Не удалось поставить лайк');
-                return;
-            }
-            em.liked = !!res.d.liked;
-            em.likes_count = res.d.likes_count || 0;
-            if (res.d.expires_at) em.expires_at = res.d.expires_at;
-            refreshEmotionLikeUI(em);
-            if (em.liked) showToast('Эмоция продлена на час');
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        }).then(function () {
-            if (btn) btn.disabled = false;
-        });
-    }
-
-    function deleteEmotion(em) {
-        /* VKMINI: из миника удаляем через VK-эндпоинт */
-        try {
-            var vkd = window.PermLiveMapVk;
-            if (vkd && vkd.vk_user_id) {
-                fetch('/api/vk/emotion/' + String(em.id) + '/', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ vk_user_id: vkd.vk_user_id, vk_params: vkd.vk_params || undefined })
-                }).then(function (r) {
-                    return r.json().then(function (d) { return { ok: r.ok, d: d }; });
-                }).then(function (res) {
-                    if (!res.ok) {
-                        showToast((res.d && res.d.error) || 'Не удалось удалить эмоцию');
-                        return;
-                    }
-                    removeEmotionMarker(em.id);
-                    showToast('Эмоция удалена');
-                }).catch(function () {
-                    showToast('Сеть недоступна, попробуйте ещё раз');
-                });
-                return;
-            }
-        } catch (e) {}
-        fetch('/api/map-emotions/' + String(em.id) + '/', {
-            method: 'DELETE',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': (window.PermLiveMapData && window.PermLiveMapData.csrf) || ''
-            }
-        }).then(function (r) {
-            return r.json().then(function (d) { return { ok: r.ok, d: d }; });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Не удалось удалить эмоцию');
-                return;
-            }
-            removeEmotionMarker(em.id);
-            showToast('Эмоция удалена');
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        });
-    }
-
-    function positionEmotionPop(markerEl) {
-        if (!markerEl) return;
-        if (window.innerWidth <= 600) {
-            emotionPopEl.classList.remove('pl-map-balloon--anchored', 'pl-map-balloon--below');
-            return;
-        }
-        var mapRect = state.mapEl.getBoundingClientRect();
-        var r = markerEl.getBoundingClientRect();
-        var x = r.left + r.width / 2 - mapRect.left;
-        var y = r.top - mapRect.top;
-        var bw = emotionPopEl.offsetWidth || 250;
-        var bh = emotionPopEl.offsetHeight || 130;
-        var cw = state.mapEl.clientWidth;
-        var xClamped = Math.max(bw / 2 + 8, Math.min(x, cw - bw / 2 - 8));
-        emotionPopEl.style.left = Math.round(xClamped) + 'px';
-        var above = y - bh - 12 >= 8;
-        emotionPopEl.classList.add('pl-map-balloon--anchored');
-        if (above) {
-            emotionPopEl.style.top = Math.round(y - 12) + 'px';
-            emotionPopEl.style.transform = 'translate(-50%, -100%)';
-            emotionPopEl.classList.remove('pl-map-balloon--below');
-        } else {
-            emotionPopEl.style.top = Math.round(y + 34) + 'px';
-            emotionPopEl.style.transform = 'translate(-50%, 0)';
-            emotionPopEl.classList.add('pl-map-balloon--below');
-        }
-    }
-
-    function hideEmotionPop() {
-        if (emotionPopEl && emotionPopEl.parentNode) {
-            try { emotionPopEl.parentNode.removeChild(emotionPopEl); } catch (err) {}
-        }
-        emotionPopEl = null;
-        emotionOpenId = null;
-    }
+    var ME = (window.PermLiveMapData && window.PermLiveMapData.mapUser) || { is_auth: false, name: '', avatar: '', is_staff: false };
 
     function attachSwipeClose(el, onClose) {
         if (!el || el.__plSwipe) return;
@@ -1943,218 +1032,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         el.addEventListener('touchmove', touchMove, { passive: false });
         el.addEventListener('touchend', touchEnd, { passive: true });
         el.addEventListener('touchcancel', touchEnd, { passive: true });
-    }
-
-    function buildEmotionComposer() {
-        emotionOverlayEl = el('div', 'pl-map-emotion-overlay');
-        emotionOverlayEl.addEventListener('click', function (e) {
-            if (e) e.stopPropagation();
-
-            if (state.composerOpenedAt && Date.now() - state.composerOpenedAt < 700) return;
-            hideEmotionComposer();
-        });
-        state.mapEl.appendChild(emotionOverlayEl);
-
-        emotionComposerEl = el('div', 'pl-map-emotion-composer');
-        emotionComposerEl.setAttribute('role', 'dialog');
-        emotionComposerEl.setAttribute('aria-modal', 'true');
-
-        var head = el('div', 'pl-map-emotion-composer__head');
-        var title = el('div', 'pl-map-emotion-composer__title', 'Ваша эмоция на карте');
-        var closeBtn = el('button', 'pl-map-control-btn pl-map-emotion-composer__close', '&times;');
-        closeBtn.type = 'button';
-        closeBtn.setAttribute('aria-label', 'Закрыть');
-        closeBtn.addEventListener('click', function (e) { if (e) e.stopPropagation(); hideEmotionComposer(); });
-        head.appendChild(title);
-        head.appendChild(closeBtn);
-
-        var grid = el('div', 'pl-map-emotion-composer__emojis');
-        EMOTION_EMOJIS.forEach(function (item) {
-            var b = el('button', 'pl-map-emotion-opt',
-                '<span class="pl-map-emotion-opt__e" aria-hidden="true">' + item.e + '</span>' +
-                '<span class="pl-map-emotion-opt__l">' + item.label + '</span>');
-            b.type = 'button';
-            b.setAttribute('data-pl-emoji', item.e);
-            b.addEventListener('click', function () {
-                emotionSelected = item.e === emotionSelected ? null : item.e;
-                var opts = grid.querySelectorAll('.pl-map-emotion-opt');
-                for (var i = 0; i < opts.length; i++) {
-                    opts[i].classList.toggle('pl-map-emotion-opt--sel', opts[i].getAttribute('data-pl-emoji') === emotionSelected);
-                }
-                submitBtn.disabled = !emotionSelected;
-            });
-            grid.appendChild(b);
-        });
-
-        var input = el('input', 'pl-map-emotion-composer__input');
-        input.type = 'text';
-        input.maxLength = 120;
-        input.placeholder = 'Короткая мысль (необязательно)';
-        input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                submitEmotion();
-            }
-        });
-
-        var submitBtn = el('button', 'pl-map-emotion-composer__submit', 'Оставить эмоцию');
-        submitBtn.type = 'button';
-        submitBtn.disabled = true;
-        submitBtn.addEventListener('click', submitEmotion);
-
-        var hint = el('div', 'pl-map-emotion-composer__hint', 'Эмоция будет видна на карте 6 часов');
-
-        emotionComposerEl.appendChild(head);
-        emotionComposerEl.appendChild(grid);
-        emotionComposerEl.appendChild(input);
-        emotionComposerEl.appendChild(submitBtn);
-        emotionComposerEl.appendChild(hint);
-        state.mapEl.appendChild(emotionComposerEl);
-    }
-
-    function showEmotionComposer(ll, clientX, clientY) {
-        try { hideFlower(); } catch (e) {}
-        if (!ME.is_auth) {
-            showToast('Войдите в профиль, чтобы оставить эмоцию на карте');
-            return;
-        }
-        if (!isTodayView()) {
-            showToast('Эмоции можно оставлять только сегодня');
-            return;
-        }
-        if (myActiveEmotion()) {
-            showToast('У вас уже есть эмоция в этом городе. Удалите её, чтобы поставить новую');
-            return;
-        }
-        if (window.__PermLiveMapEmotionOpen) return;
-        if (!emotionComposerEl) buildEmotionComposer();
-        state.emotionAnchor = ll;
-        state.composerScreen = [clientX, clientY];
-        state.emotionAnchorCamera = (state.map && state.map.center && typeof state.map.zoom === 'number')
-            ? [state.map.center[0], state.map.center[1], state.map.zoom]
-            : null;
-        emotionSelected = null;
-        var opts = emotionComposerEl.querySelectorAll('.pl-map-emotion-opt');
-        for (var i = 0; i < opts.length; i++) opts[i].classList.remove('pl-map-emotion-opt--sel');
-        var input = emotionComposerEl.querySelector('.pl-map-emotion-composer__input');
-        if (input) input.value = '';
-        var submit = emotionComposerEl.querySelector('.pl-map-emotion-composer__submit');
-        if (submit) submit.disabled = true;
-        emotionComposerEl.classList.add('pl-map-emotion-composer--open');
-        emotionOverlayEl.classList.add('pl-map-emotion-overlay--show');
-        state.composerOpenedAt = Date.now();
-        window.__PermLiveMapEmotionOpen = true;
-        positionEmotionComposer(clientX, clientY);
-    }
-
-    function positionEmotionComposer(clientX, clientY) {
-        if (window.innerWidth <= 600) {
-            emotionComposerEl.style.left = '';
-            emotionComposerEl.style.top = '';
-            return;
-        }
-        var mapRect = state.mapEl.getBoundingClientRect();
-        var cw = state.mapEl.clientWidth;
-        var ch = state.mapEl.clientHeight;
-        var w = emotionComposerEl.offsetWidth || 360;
-        var h = emotionComposerEl.offsetHeight || 320;
-        var cx = Math.max(w / 2 + 12, Math.min(clientX - mapRect.left, cw - w / 2 - 12));
-        var cy = Math.max(h / 2 + 12, Math.min(clientY - mapRect.top, ch - h / 2 - 12));
-        emotionComposerEl.style.left = Math.round(cx) + 'px';
-        emotionComposerEl.style.top = Math.round(cy) + 'px';
-    }
-
-    function hideEmotionComposer() {
-        if (!emotionComposerEl) return;
-        emotionComposerEl.classList.remove('pl-map-emotion-composer--open');
-        emotionOverlayEl.classList.remove('pl-map-emotion-overlay--show');
-        window.__PermLiveMapEmotionOpen = false;
-    }
-
-    function submitEmotion() {
-        if (!emotionSelected) return;
-
-        var anchor = state.emotionAnchor;
-        var cam = state.emotionAnchorCamera;
-        var cameraStayed = !!(cam && state.map && state.map.center &&
-            typeof state.map.zoom === 'number' &&
-            Math.abs(state.map.center[0] - cam[0]) < 1e-9 &&
-            Math.abs(state.map.center[1] - cam[1]) < 1e-9 &&
-            state.map.zoom === cam[2]);
-        if (!cameraStayed && state.composerScreen && screenToLngLat) {
-            var fresh = screenToLngLat(state.composerScreen[0], state.composerScreen[1]);
-            if (fresh) anchor = fresh;
-        }
-        if (!anchor) return;
-        var input = emotionComposerEl.querySelector('.pl-map-emotion-composer__input');
-        var text = (input && input.value ? input.value : '').trim().slice(0, 120);
-        /* VKMINI: из миника постим через VK-эндпоинт (сессии нет, только vk_user_id) */
-        try {
-            var vkm = window.PermLiveMapVk;
-            if (vkm && vkm.vk_user_id) {
-                fetch('/api/vk/emotion/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ vk_user_id: vkm.vk_user_id, vk_params: vkm.vk_params || undefined, emoji: emotionSelected, text: text, coords: anchor, vk_name: vkm.vk_name || '', vk_avatar: vkm.vk_avatar || '' })
-                }).then(function (r) {
-                    return r.text().then(function (t) {
-                        var d = null;
-                        try { d = JSON.parse(t); } catch (err) {}
-                        return { ok: r.ok, status: r.status, d: d };
-                    });
-                }).then(function (res) {
-                    if (!res.ok) {
-                        showToast((res.d && res.d.error) || 'Ошибка сервера (' + res.status + '), попробуйте ещё раз');
-                        hideEmotionComposer();
-                        return;
-                    }
-                    addEmotion(res.d);
-                    hideEmotionComposer();
-                    showToast('Готово! Эмоция появится на карте на 6 часов');
-                }).catch(function () {
-                    showToast('Сеть недоступна, попробуйте ещё раз');
-                });
-                return;
-            }
-        } catch (e) {}
-        fetch('/api/map-emotions/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': (window.PermLiveMapData && window.PermLiveMapData.csrf) || ''
-            },
-            body: JSON.stringify({ emoji: emotionSelected, text: text, coords: anchor })
-        }).then(function (r) {
-
-            return r.text().then(function (t) {
-                var d = null;
-                try { d = JSON.parse(t); } catch (err) {  }
-                return { ok: r.ok, status: r.status, d: d };
-            });
-        }).then(function (res) {
-            if (!res.ok) {
-                showToast((res.d && res.d.error) || 'Ошибка сервера (' + res.status + '), попробуйте ещё раз');
-                hideEmotionComposer();
-                return;
-            }
-            addEmotion(res.d);
-            hideEmotionComposer();
-            showToast('Готово! Эмоция появится на карте на 6 часов');
-        }).catch(function () {
-            showToast('Сеть недоступна, попробуйте ещё раз');
-        });
-    }
-
-    function handleEmotionClick(el_) {
-        var em = el_.__em;
-        if (!em) return;
-
-        if (emotionOpenId === em.id && emotionPopEl && emotionPopEl.parentNode) {
-            hideEmotionPop();
-            return;
-        }
-        openEmotionPop(em, el_);
     }
 
     function screenToLngLat(clientX, clientY) {
@@ -2220,11 +1097,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function closeMapPopups() {
         var any = false;
         if (state.balloonOpenId) { closeBalloon(); any = true; }
-        if (emotionOpenId && emotionPopEl && emotionPopEl.parentNode) { hideEmotionPop(); any = true; }
         if (isLegendOpen()) { closeLegend(); any = true; }
         if (isFlowerOpen()) { hideFlower(); any = true; }
         if (state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open')) { hideProposeComposer(); any = true; }
-        if (window.__PermLiveMapEmotionOpen) { hideEmotionComposer(); any = true; }
         clearFlowerTap();
         return any;
     }
@@ -2251,16 +1126,16 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function isMapUI(e) {
         var t = document.elementFromPoint(e.clientX, e.clientY);
         if (!t || !t.closest) return false;
-        if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion, .pl-map-balloon, ' +
-            '.pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
-            '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
+        if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-balloon, ' +
+            '.pl-map-propose-composer, .pl-map-propose-overlay, ' +
+            '.pl-map-flower, .pl-map-flower-overlay, ' +
             '.pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-legend-modal, .pl-map-legend-overlay, ' +
             '.pl-map-controls, .pl-map-calendar-modal, .pl-map-calendar-overlay')) return true;
 
         if (t.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]')) return true;
 
         if (t.closest('#map button, #map a') ) {
-            if (!t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion')) return true;
+            if (!t.closest('.pl-map-pin, .pl-map-cluster')) return true;
         }
         return false;
     }
@@ -2268,13 +1143,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     /* Селектор интерфейса поверх карты: календарь, кнопки, балуны, композеры.
        Тап по нему не должен уходить пинам/кластерам, даже если те геометрически
        под интерфейсом (elementsFromPoint их находит сквозь модалку). */
-    var MAP_UI_SEL = '.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, ' +
+    var MAP_UI_SEL = '.pl-map-balloon, ' +
         '.pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, ' +
         '.pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, ' +
         '.pl-map-calendar-modal, .pl-map-calendar-overlay, .pl-map-legend-modal, .pl-map-legend-overlay';
     function overlayTarget(t) {
         if (!t || !t.closest) return false;
-        if (t.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion')) return false;
+        if (t.closest('.pl-map-pin, .pl-map-cluster')) return false;
         return !!t.closest(MAP_UI_SEL);
     }
 
@@ -2314,16 +1189,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var sx = state.flowerScreen ? state.flowerScreen[0] : 0;
         var sy = state.flowerScreen ? state.flowerScreen[1] : 0;
         hideFlower();
-        if (id === 'emotion') {
-            if (!ll) return;
-
-            if (!ME.is_auth) { showToast('Войдите в профиль, чтобы оставить эмоцию на карте'); return; }
-            if (!isTodayView()) { showToast('Эмоции можно оставлять только сегодня'); return; }
-            if (myActiveEmotion()) { showToast('У вас уже есть эмоция на карте. Удалите её, чтобы поставить новую'); return; }
-            if (window.__PermLiveMapEmotionOpen) return;
-            var fresh = ll;
-            showEmotionComposer(fresh, sx, sy);
-        } else if (id === 'propose') {
+        if (id === 'propose') {
             showProposeComposer(ll, sx, sy);
         }
     }
@@ -2378,7 +1244,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function flowerEsc(e) {
-        if (e.key === 'Escape') { hideFlower(); hideProposeComposer(); hideEmotionComposer(); }
+        if (e.key === 'Escape') { hideFlower(); hideProposeComposer(); }
     }
 
     function hideFlower() {
@@ -2759,7 +1625,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     function openLegend() {
         closeBalloon();
-        if (emotionOpenId) hideEmotionPop();
         if (!legendModal) {
             legendOverlay = el('div', 'pl-map-legend-overlay');
             legendOverlay.addEventListener('click', function () { closeLegend(); });
@@ -2770,14 +1635,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             document.body.appendChild(legendModal);
         }
         var avail = getTypeAvailability();
-        var emotionCount = (state.emotionsVisible && isTodayView()) ? state.emotions.length : 0;
         var rows = '';
         for (var k = 0; k < FILTER_TYPES.length; k++) {
             var key = FILTER_TYPES[k];
             rows += legendRow(GENRE_COLORS[key], GENRE_LABELS[key], avail.counts[key]);
         }
         rows += legendRow(GENRE_COLORS.other, GENRE_LABELS.other, null);
-        rows += legendRow('#8b5cf6', 'Эмоции', emotionCount, 'pl-map-legend__row--emotion');
         legendModal.innerHTML =
             '<button type="button" class="pl-map-legend-modal__close" aria-label="Закрыть легенду">&times;</button>' +
             '<div class="pl-map-legend-modal__title">Что означают цвета</div>' + rows;
@@ -2850,19 +1713,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 controls.appendChild(btn);
             })(filterDefs[fi]);
         }
-
-        var emoBtn = el('button', 'pl-map-control-btn pl-map-emotions-toggle', '<span aria-hidden="true">🙂</span>');
-        emoBtn.type = 'button';
-        emoBtn.title = 'Эмоции на карте: включены';
-        emoBtn.setAttribute('aria-label', 'Показать/скрыть эмоции на карте');
-        if (state.emotionsVisible) emoBtn.classList.add('is-active');
-        emotionToggleBtn = emoBtn;
-        state.filterBtns['emotions'] = emoBtn;
-        emoBtn.addEventListener('click', function () {
-            var on = !state.emotionsVisible;
-            setEmotionsVisible(on);
-        });
-        controls.appendChild(emoBtn);
 
         // Легенда карты: только просмотр (фильтры — отдельными кнопками выше).
         var legendBtn = el('button', 'pl-map-control-btn pl-map-legend-btn', '<i class="fas fa-circle-question" aria-hidden="true"></i>');
@@ -2997,26 +1847,14 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 var map = ctx.map;
                 var features = ctx.features;
                 var soloPaid = [];
-                // Эмоции — всегда отдельными маркерами, вне кластеров
-                // (как оплаченные на детальных масштабах, но на любом зуме).
-                var soloEmotions = [];
                 if (map.zoom >= PAID_SOLO_ZOOM) {
                     var pool = [];
                     for (var i = 0; i < features.length; i++) {
                         var pr = features[i].properties || {};
-                        if (pr.featureType === 'emotion') soloEmotions.push(features[i]);
-                        else if (pr.paid && !pr.featureType) soloPaid.push(features[i]);
+                        if (pr.paid && !pr.featureType) soloPaid.push(features[i]);
                         else pool.push(features[i]);
                     }
                     features = pool;
-                } else {
-                    var pool2 = [];
-                    for (var j = 0; j < features.length; j++) {
-                        var pr2 = features[j].properties || {};
-                        if (pr2.featureType === 'emotion') soloEmotions.push(features[j]);
-                        else pool2.push(features[j]);
-                    }
-                    features = pool2;
                 }
                 var projection = map.projection;
                 var worldPerPx = 1 / (128 * Math.pow(2, map.zoom));
@@ -3061,10 +1899,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 }
 
                 var out = [];
-                // Эмоции вне кластера — отдельными маркерами как есть
-                for (var se = 0; se < soloEmotions.length; se++) {
-                    out.push({ lnglat: soloEmotions[se].geometry.coordinates, clusterId: String(soloEmotions[se].id), features: [soloEmotions[se]] });
-                }
                 // Оплаченные вне кластера — отдельными пинами как есть
                 for (var sp = 0; sp < soloPaid.length; sp++) {
                     out.push({ lnglat: soloPaid[sp].geometry.coordinates, clusterId: String(soloPaid[sp].id), features: [soloPaid[sp]] });
@@ -3147,7 +1981,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.mapEl.appendChild(state.balloonEl);
         state.mapEl.appendChild(buildControls());
 
-        applyEmotionLayer();
         syncFilterVisibility();
 
         if (!window.__plMapDocBound) {
@@ -3160,7 +1993,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 pressedXY = null;
                 return;
             }
-            var pick = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin, .pl-map-cluster, .pl-map-emotion');
+            var pick = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin, .pl-map-cluster');
             if (pick) {
                 pressedEl = pick;
                 pressedXY = [e.clientX, e.clientY];
@@ -3185,7 +2018,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var top2 = null;
             try { top2 = document.elementFromPoint(e.clientX, e.clientY); } catch (err) { top2 = e.target; }
             if (overlayTarget(top2) || overlayTarget(e.target)) return;
-            var pick2 = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin, .pl-map-cluster, .pl-map-emotion');
+            var pick2 = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin, .pl-map-cluster');
             if (pick2) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3221,10 +2054,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                     e.preventDefault();
                     e.stopPropagation();
 
-                    if (closeBtn.closest('.pl-map-emotion-pop')) hideEmotionPop();
-                    else closeBalloon();
-
-                    if (emotionOpenId && !closeBtn.closest('.pl-map-emotion-pop')) hideEmotionPop();
+                    closeBalloon();
                     pressedEl = null;
                     pressedXY = null;
                     return;
@@ -3242,7 +2072,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             pressedEl = null;
             pressedXY = null;
 
-            if (pressed && target && target.closest && target.closest('.pl-map-balloon, .pl-map-emotion-pop')) {
+            if (pressed && target && target.closest && target.closest('.pl-map-balloon')) {
                 pressed = null;
             }
 
@@ -3262,13 +2092,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                     handleClusterClick(pressedCluster.__features, pressedCluster.__coords, pressedCluster);
                     return;
                 }
-                var pressedMood = pressed.closest('.pl-map-emotion');
-                if (pressedMood) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleEmotionClick(pressedMood);
-                    return;
-                }
             }
 
             var pinEl = pickElAtPoint(e.clientX, e.clientY, '.pl-map-pin');
@@ -3286,35 +2109,24 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 handleClusterClick(clusterEl.__features, clusterEl.__coords, clusterEl);
                 return;
             }
-            var moodEl = pickElAtPoint(e.clientX, e.clientY, '.pl-map-emotion');
-            if (moodEl) {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEmotionClick(moodEl);
-                return;
-            }
             if (!target || !target.closest) return;
 
             if (target.closest && (
-                target.closest('.pl-map-balloon, .pl-map-emotion-pop, .pl-map-emotion-composer, .pl-map-emotion-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-calendar-modal, .pl-map-calendar-overlay, .pl-map-legend-modal, .pl-map-legend-overlay') ||
+                target.closest('.pl-map-balloon, .pl-map-propose-composer, .pl-map-propose-overlay, .pl-map-flower, .pl-map-flower-overlay, .pl-map-controls, .pl-map-date-btn, .pl-map-mode-btn, .pl-map-mode-dropdown, .pl-map-calendar-modal, .pl-map-calendar-overlay, .pl-map-legend-modal, .pl-map-legend-overlay') ||
                 target.closest('[class*="controls"], [class*="copyright"], [class*="logo"], a[href*="yandex"]') ||
-                (target.closest('#map button, #map a') && !target.closest('.pl-map-pin, .pl-map-cluster, .pl-map-emotion'))
+                (target.closest('#map button, #map a') && !target.closest('.pl-map-pin, .pl-map-cluster'))
             )) return;
 
             var wasBalloon = !!state.balloonOpenId;
-            var wasEmotionPop = !!(emotionOpenId && emotionPopEl && emotionPopEl.parentNode);
             var wasLegend = isLegendOpen();
             var wasFlower = isFlowerOpen();
             var wasPropose = !!(state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open'));
-            var wasComposer = !!(window.__PermLiveMapEmotionOpen);
             var wasSiteUI = closeSiteOverlays();
             if (wasFlower) hideFlower();
             if (wasPropose) hideProposeComposer();
-            if (wasEmotionPop) hideEmotionPop();
-            if (wasComposer) hideEmotionComposer();
             if (wasBalloon) closeBalloon();
             if (wasLegend) closeLegend();
-            if (wasBalloon || wasEmotionPop || wasFlower || wasPropose || wasComposer || wasSiteUI || wasLegend) {
+            if (wasBalloon || wasFlower || wasPropose || wasSiteUI || wasLegend) {
                 clearFlowerTap();
                 return;
             }
@@ -3340,15 +2152,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             e.stopPropagation();
 
             var wasBalloon2 = !!state.balloonOpenId;
-            var wasEmotionPop2 = !!(emotionOpenId && emotionPopEl && emotionPopEl.parentNode);
             var wasFlower2 = isFlowerOpen();
             var wasPropose2 = !!(state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open'));
             var wasSiteUI2 = closeSiteOverlays();
             if (wasFlower2) hideFlower();
             if (wasPropose2) hideProposeComposer();
-            if (wasEmotionPop2) hideEmotionPop();
             if (wasBalloon2) closeBalloon();
-            if (wasBalloon2 || wasEmotionPop2 || wasFlower2 || wasPropose2 || wasSiteUI2) return;
+            if (wasBalloon2 || wasFlower2 || wasPropose2 || wasSiteUI2) return;
             var ll2 = screenToLngLat(e.clientX, e.clientY);
             if (ll2) showFlower(ll2, e.clientX, e.clientY);
         }, true);
@@ -3359,7 +2169,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 map.camera.onUpdate.addListener(function () {
 
                     if (state.balloonOpenId && Date.now() - state.balloonOpenedAt > 600) closeBalloon();
-                    if (emotionOpenId) hideEmotionPop();
                     if (isLegendOpen()) closeLegend();
                     if (isFlowerOpen()) hideFlower();
                     if (state.proposeEl && state.proposeEl.classList.contains('pl-map-emotion-composer--open')) hideProposeComposer();
@@ -3369,7 +2178,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
         // не запрашивать геопозицию автоматом — только по клику на кнопку, запоминаем до чистки куки
         // requestUserLocation(false, true);
-        fetchEmotions();
         ensurePinTicker();
 
         window.__PermLiveMapReady = true;
@@ -3434,10 +2242,6 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     window.__plEventsMapBoundCleanup = function () {
         try { hideFlower(); } catch (e) {}
         try { hideProposeComposer(); } catch (e) {}
-        if (state.emotionTimer) {
-            clearInterval(state.emotionTimer);
-            state.emotionTimer = null;
-        }
         document.body.style.removeProperty('height');
         document.body.style.removeProperty('overflow');
         document.body.style.removeProperty('--header-height');
@@ -3496,12 +2300,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     /* VKMINI: миник перечитывает эмоции после резолва пользователя (is_mine) */
-    window.PermLiveMaps.refreshEmotions = fetchEmotions;
     window.PermLiveMaps.setEvents = function (events, opts) {
         state.events = Array.isArray(events) ? events : [];
         renderEvents(!opts || opts.recenter !== false);
 
-        applyEmotionLayer(true);
         syncFilterVisibility();
     };
 
