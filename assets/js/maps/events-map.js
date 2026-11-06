@@ -695,6 +695,66 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<div class="pl-map-balloon__venue-main">' + name + addr + '</div></div>';
     }
 
+    function clusterBodyHtml(groups, activeIdx) {
+        if (!groups.length) return { html: '', isTabbed: false };
+        if (groups.length === 1) {
+            var only = groups[0];
+            return {
+                html: venueHeadHtml(only) + only.feats.map(function (f) {
+                    return clusterItemHtml(f.properties);
+                }).join(''),
+                isTabbed: false
+            };
+        }
+        var tabsHtml = '<div class="pl-map-balloon__tabs" role="tablist">' + groups.map(function (gr, idx) {
+            return '<button type="button" role="tab" class="pl-map-balloon__tab' +
+                (idx === activeIdx ? ' pl-map-balloon__tab--active' : '') + '" data-tab="' + idx + '"' +
+                ' aria-selected="' + (idx === activeIdx ? 'true' : 'false') + '"' +
+                ' title="' + escapeAttr(gr.place) + '">' +
+                '<span class="pl-map-balloon__tab-name">' + escapeHtml(gr.place) + '</span>' +
+                '<span class="pl-map-balloon__tab-count">' + gr.feats.length + '</span></button>';
+        }).join('') + '</div>';
+        var panelsHtml = '<div class="pl-map-balloon__tabpanels">' + groups.map(function (gr, idx) {
+            var list = gr.feats.map(function (f) {
+                return clusterItemHtml(f.properties);
+            }).join('');
+            return '<div class="pl-map-balloon__tabpanel' +
+                (idx === activeIdx ? ' pl-map-balloon__tabpanel--active' : '') + '" role="tabpanel" data-panel="' + idx + '">' +
+                venueHeadHtml(gr) + list + '</div>';
+        }).join('') + '</div>';
+        return { html: tabsHtml + panelsHtml, isTabbed: true };
+    }
+
+    function bindClusterTabs() {
+        var tabs = state.balloonEl.querySelectorAll('.pl-map-balloon__tab');
+        var panels = state.balloonEl.querySelectorAll('.pl-map-balloon__tabpanel');
+        if (!tabs.length) return;
+        var selectTab = function (idx) {
+            for (var ti = 0; ti < tabs.length; ti++) {
+                var on = ti === idx;
+                tabs[ti].classList.toggle('pl-map-balloon__tab--active', on);
+                tabs[ti].setAttribute('aria-selected', on ? 'true' : 'false');
+            }
+            for (var pi = 0; pi < panels.length; pi++) {
+                panels[pi].classList.toggle('pl-map-balloon__tabpanel--active', pi === idx);
+            }
+            try { state.balloonEl.scrollTop = 0; } catch (e) {}
+            try {
+                if (tabs[idx] && tabs[idx].scrollIntoView) {
+                    tabs[idx].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                }
+            } catch (e) {}
+        };
+        for (var ti = 0; ti < tabs.length; ti++) {
+            (function (idx) {
+                tabs[idx].addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    selectTab(idx);
+                });
+            })(ti);
+        }
+    }
+
     function fillClusterBalloon(bodyHtml, isTabbed) {
         state.balloonEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +

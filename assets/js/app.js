@@ -1260,8 +1260,17 @@ async function loadData(){
         window.PermLiveMapVk.vk_user_id = String(vkId);
         if(vkParams) window.PermLiveMapVk.vk_params = vkParams;
       }catch(e){}
-      // без кэша: отрицательный результат не должен залипать
-      const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?${cityQuery()}&vk_user_id=${encodeURIComponent(vkId)}`);
+      // без кэша: отрицательный результат не должен залипать.
+      // vk_* + sign из launch-params обязательны: backend проверяет подпись,
+      // иначе эндпоинт открыт для подмены vk_user_id.
+      let recQs = cityQuery() + '&vk_user_id=' + encodeURIComponent(vkId);
+      if (vkParams && typeof vkParams === 'object') {
+        for (const [k, v] of Object.entries(vkParams)) {
+          if (v === undefined || v === null) continue;
+          recQs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(v);
+        }
+      }
+      const rec=await fetchJSON(`${API_BASE}/api/vk/recommendations/?${recQs}`);
       state.hasAccount = !!(rec && rec.has_user);
       // для привязанных — сразу даём карте vk_user_id, чтобы backend отдал
       // корректный is_mine (не ждём bridge UserInfo — он может не ответить,
