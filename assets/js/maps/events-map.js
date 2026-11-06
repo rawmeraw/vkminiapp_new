@@ -40,18 +40,21 @@
         syktyvkar: [50.8358, 61.6687]
     };
 
-    // Цвета типов событий: hard — Рок и тяжёлое (оранжевый),
-    // academic — Акустика и классика (олива), pop — Поп и электроника
-    // (электрик-синий), other — Прочее (серый).
+    // Цвета типов событий: extreme — Экстрим (чёрный, тяжелее рока),
+    // hard — Рок и тяжёлое (оранжевый), academic — Акустика и классика
+    // (светлая олива), pop — Поп и электроника (электрик-синий),
+    // other — Прочее (серый).
     var GENRE_COLORS = {
+        'extreme': '#111111',
         'hard': '#f05a15',
-        'academic': '#86992c',
+        'academic': '#7cb342',
         'pop': '#06b6d4',
         'other': '#94a3b8'
     };
 
     // Подписи для легенды карты (порядок = порядок строк).
     var GENRE_LABELS = {
+        'extreme': 'Экстрим',
         'hard': 'Рок и тяжёлое',
         'academic': 'Акустика и классика',
         'pop': 'Поп и электроника',
@@ -64,7 +67,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var pressedXY = null;
 
     var FILTER_KEY = 'pl_map_filters_v3';
-    var FILTER_TYPES = ['hard', 'academic', 'pop'];
+    var FILTER_TYPES = ['extreme', 'hard', 'academic', 'pop'];
     var MODE_KEY = 'pl_map_mode_v1';
 
     var state = {
@@ -84,7 +87,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         clusterer: null,
         toastTimer: null,
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
-        filters: { hard: true, academic: true, pop: true },
+        filters: { extreme: true, hard: true, academic: true, pop: true },
         modeFilter: 'all',
         filterBtns: {},
         flowerEl: null,
@@ -102,9 +105,21 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return node;
     }
 
+    // Тип события для цвета/фильтра: extreme важнее всех — чёрный пин,
+    // даже если первым тегом идёт другой тип. Иначе — первый тег.
+    function primaryTagType(event) {
+        var tags = (event && event.tags) || [];
+        var first = '';
+        for (var i = 0; i < tags.length; i++) {
+            var t = String((tags[i] && tags[i].type) || '').toLowerCase();
+            if (t === 'extreme') return 'extreme';
+            if (!first) first = t;
+        }
+        return first;
+    }
+
     function genreColor(event) {
-        var type = event.tags && event.tags[0] && event.tags[0].type;
-        type = String(type || 'other').toLowerCase();
+        var type = primaryTagType(event) || 'other';
         return GENRE_COLORS[type] || GENRE_COLORS.other;
     }
 
@@ -179,8 +194,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         try { window.dispatchEvent(new CustomEvent('pl:map-mode-changed', { detail: mode })); } catch (e) {}
     }
     function primaryType(ev) {
-        if (!ev || !ev.tags || !ev.tags.length) return '';
-        return String(ev.tags[0].type || '').toLowerCase();
+        return primaryTagType(ev);
     }
     function passesTypeFilter(ev) {
         var t = primaryType(ev);
@@ -198,7 +212,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function getTypeAvailability() {
-        var cnt = { hard: 0, academic: 0, pop: 0 };
+        var cnt = { extreme: 0, hard: 0, academic: 0, pop: 0 };
         for (var i = 0; i < state.events.length; i++) {
             var t = primaryType(state.events[i]);
             if (cnt.hasOwnProperty(t)) cnt[t]++;
@@ -450,12 +464,22 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var c = genreColor(features[i].properties);
             counts[c] = (counts[c] || 0) + 1;
         }
+        // Тонкие светлые разделители между секторами: без них соседние
+        // цвета (особенно тёмная олива) сливаются в грязное «облако».
+        var keys = Object.keys(counts);
+        var GAP = keys.length > 1 ? 1.4 : 0;
         var stops = [];
         var acc = 0;
-        Object.keys(counts).forEach(function (color) {
+        keys.forEach(function (color, idx) {
             var from = acc;
             acc += counts[color] / features.length;
-            stops.push(color + ' ' + (from * 100).toFixed(1) + '% ' + (acc * 100).toFixed(1) + '%');
+            var s = from * 100;
+            var e = acc * 100;
+            var cut = idx < keys.length - 1 ? Math.max(s, e - GAP) : e;
+            stops.push(color + ' ' + s.toFixed(1) + '% ' + cut.toFixed(1) + '%');
+            if (cut < e) {
+                stops.push('#ffffff ' + cut.toFixed(1) + '% ' + e.toFixed(1) + '%');
+            }
         });
         circle.style.background = 'conic-gradient(' + stops.join(', ') + ')';
         circle.__features = features;
@@ -1752,6 +1776,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         controls.appendChild(fsBtn);
 
         var filterDefs = [
+            { key: 'extreme', label: 'Экстрим', cls: 'pl-map-filter-btn--extreme', icon: '<i class="fas fa-skull" aria-hidden="true"></i>' },
             { key: 'hard', label: 'Рок и тяжёлое', cls: 'pl-map-filter-btn--hard', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
             { key: 'academic', label: 'Акустика и классика', cls: 'pl-map-filter-btn--academic', icon: '<i class="fas fa-feather" aria-hidden="true"></i>' },
             { key: 'pop', label: 'Поп и электроника', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-compact-disc" aria-hidden="true"></i>' }
