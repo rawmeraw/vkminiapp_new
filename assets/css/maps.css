@@ -1933,6 +1933,43 @@ a.pl-map-balloon__venue-name:hover {
     padding: 2px 7px;
 }
 
+.pl-map-legend__row--toggle {
+    width: 100%;
+    border: 0;
+    border-top: 1px solid #f0f0f0;
+    background: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    transition: background 0.15s ease;
+}
+
+.pl-map-legend__row--toggle:hover,
+.pl-map-legend__row--toggle:focus-visible {
+    background: #f5f5f5;
+    outline: none;
+}
+
+.pl-map-legend__row--toggle.is-off .pl-map-legend__dot,
+.pl-map-legend__row--toggle.is-off .pl-map-legend__label {
+    opacity: 0.35;
+}
+
+.pl-map-legend__eye {
+    flex: none;
+    width: 16px;
+    text-align: center;
+    color: #777;
+    font-size: 0.85rem;
+}
+
+.pl-map-legend__row--toggle.is-off .pl-map-legend__eye {
+    color: #bbb;
+}
+
 @media (max-width: 600px) {
     .pl-map-legend-modal {
         top: auto;

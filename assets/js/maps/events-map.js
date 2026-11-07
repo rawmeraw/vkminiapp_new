@@ -1908,6 +1908,35 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<span class="pl-map-legend__label">' + escapeHtml(label) + '</span>' + cnt + '</div>';
     }
 
+    function legendFilterRow(color, label, count, key) {
+        var on = state.filters[key] !== false;
+        var cnt = (typeof count === 'number' && count > 0)
+            ? '<span class="pl-map-legend__count">' + count + '</span>' : '';
+        return '<button type="button" class="pl-map-legend__row pl-map-legend__row--toggle' +
+            (on ? '' : ' is-off') + '" data-key="' + escapeAttr(key) + '"' +
+            ' aria-pressed="' + (on ? 'true' : 'false') + '" title="' +
+            escapeAttr(label + ': ' + (on ? 'показаны' : 'скрыты') + ' — нажмите, чтобы переключить') + '">' +
+            '<span class="pl-map-legend__dot" style="background:' + escapeAttr(color) + '"></span>' +
+            '<span class="pl-map-legend__label">' + escapeHtml(label) + '</span>' + cnt +
+            '<i class="fas ' + (on ? 'fa-eye' : 'fa-eye-slash') + ' pl-map-legend__eye" aria-hidden="true"></i></button>';
+    }
+
+    function paintLegendToggles() {
+        if (!legendModal) return;
+        var rows = legendModal.querySelectorAll('.pl-map-legend__row--toggle');
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            var key = r.getAttribute('data-key');
+            var on = state.filters[key] !== false;
+            r.classList.toggle('is-off', !on);
+            r.setAttribute('aria-pressed', on ? 'true' : 'false');
+            var ic = r.querySelector('.pl-map-legend__eye');
+            if (ic) {
+                ic.className = 'fas ' + (on ? 'fa-eye' : 'fa-eye-slash') + ' pl-map-legend__eye';
+            }
+        }
+    }
+
     function openLegend() {
         closeBalloon();
         if (!legendModal) {
@@ -1923,17 +1952,29 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var rows = '';
         for (var k = 0; k < FILTER_TYPES.length; k++) {
             var key = FILTER_TYPES[k];
-            rows += legendRow(GENRE_COLORS[key], GENRE_LABELS[key], avail.counts[key]);
+            rows += legendFilterRow(GENRE_COLORS[key], GENRE_LABELS[key], avail.counts[key], key);
         }
         rows += legendRow(GENRE_COLORS.other, GENRE_LABELS.other, null);
         legendModal.innerHTML =
             '<button type="button" class="pl-map-legend-modal__close" aria-label="Закрыть легенду">&times;</button>' +
-            '<div class="pl-map-legend-modal__title">Что означают цвета</div>' + rows;
+            '<div class="pl-map-legend-modal__title">Что означают цвета — нажмите, чтобы скрыть или показать</div>' + rows;
         var closeBtn = legendModal.querySelector('.pl-map-legend-modal__close');
         if (closeBtn) closeBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             closeLegend();
         });
+        var toggles = legendModal.querySelectorAll('.pl-map-legend__row--toggle');
+        for (var ti = 0; ti < toggles.length; ti++) {
+            (function (row) {
+                row.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var tkey = row.getAttribute('data-key');
+                    state.filters[tkey] = !(state.filters[tkey] !== false);
+                    applyFilterChange();
+                    paintLegendToggles();
+                });
+            })(toggles[ti]);
+        }
         legendOverlay.classList.add('pl-map-legend-overlay--show');
         legendModal.classList.add('pl-map-legend-modal--open');
         legendModal.setAttribute('aria-hidden', 'false');
@@ -1976,34 +2017,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         });
         controls.appendChild(fsBtn);
 
-        var filterDefs = [
-            { key: 'extreme', label: 'Экстрим', cls: 'pl-map-filter-btn--extreme', icon: '<i class="fas fa-skull" aria-hidden="true"></i>' },
-            { key: 'hard', label: 'Рок и акустика', cls: 'pl-map-filter-btn--hard', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
-            { key: 'academic', label: 'Классика и джаз', cls: 'pl-map-filter-btn--academic', icon: '<i class="fas fa-feather" aria-hidden="true"></i>' },
-            { key: 'pop', label: 'Поп и электроника', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-compact-disc" aria-hidden="true"></i>' }
-        ];
-        for (var fi = 0; fi < filterDefs.length; fi++) {
-            (function (def) {
-                var btn = el('button', 'pl-map-control-btn pl-map-filter-btn ' + def.cls, def.icon);
-                btn.type = 'button';
-                btn.setAttribute('aria-label', def.label + ' — фильтр событий');
-                btn.setAttribute('aria-pressed', state.filters[def.key] ? 'true' : 'false');
-                if (state.filters[def.key]) btn.classList.add('is-active');
-                btn.title = def.label + ': ' + (state.filters[def.key] ? 'показаны' : 'скрыты');
-                btn.addEventListener('click', function () {
-                    var on = !state.filters[def.key];
-                    state.filters[def.key] = on;
-                    applyFilterChange();
-                });
-                state.filterBtns[def.key] = btn;
-                controls.appendChild(btn);
-            })(filterDefs[fi]);
-        }
-
-        // Легенда карты: только просмотр (фильтры — отдельными кнопками выше).
+        // Легенда карты: заодно переключатель типов (глазики в строках).
         var legendBtn = el('button', 'pl-map-control-btn pl-map-legend-btn', '<i class="fas fa-circle-question" aria-hidden="true"></i>');
         legendBtn.type = 'button';
-        legendBtn.title = 'Легенда карты: что означает каждый цвет';
+        legendBtn.title = 'Легенда карты: цвета и фильтр типов';
         legendBtn.setAttribute('aria-label', 'Открыть легенду карты');
         legendBtn.addEventListener('click', function (e) {
             e.stopPropagation();
