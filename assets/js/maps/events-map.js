@@ -67,7 +67,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var pressedXY = null;
 
     var FILTER_KEY = 'pl_map_filters_v3';
-    var FILTER_TYPES = ['extreme', 'hard', 'academic', 'pop'];
+    var FILTER_TYPES = ['extreme', 'hard', 'academic', 'pop', 'other'];
     var MODE_KEY = 'pl_map_mode_v1';
 
     var state = {
@@ -87,7 +87,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         clusterer: null,
         toastTimer: null,
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
-        filters: { extreme: true, hard: true, academic: true, pop: true },
+        filters: { extreme: true, hard: true, academic: true, pop: true, other: true },
         modeFilter: 'all',
         filterBtns: {},
         flowerEl: null,
@@ -217,7 +217,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function getTypeAvailability() {
-        var cnt = { extreme: 0, hard: 0, academic: 0, pop: 0 };
+        var cnt = { extreme: 0, hard: 0, academic: 0, pop: 0, other: 0 };
         for (var i = 0; i < state.events.length; i++) {
             var t = primaryType(state.events[i]);
             if (cnt.hasOwnProperty(t)) cnt[t]++;
@@ -1960,10 +1960,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var key = FILTER_TYPES[k];
             rows += legendFilterRow(GENRE_COLORS[key], GENRE_LABELS[key], avail.counts[key], key);
         }
-        rows += legendRow(GENRE_COLORS.other, GENRE_LABELS.other, null);
         legendModal.innerHTML =
             '<button type="button" class="pl-map-legend-modal__close" aria-label="Закрыть легенду">&times;</button>' +
-            '<div class="pl-map-legend-modal__title">Что означают цвета — нажмите, чтобы скрыть или показать</div>' + rows;
+            '<div class="pl-map-legend-modal__title">Легенда — нажми, чтобы скрыть или показать</div>' + rows;
         var closeBtn = legendModal.querySelector('.pl-map-legend-modal__close');
         if (closeBtn) closeBtn.addEventListener('click', function (e) {
             e.stopPropagation();

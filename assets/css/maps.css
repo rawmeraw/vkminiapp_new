@@ -1941,16 +1941,19 @@ a.pl-map-balloon__venue-name:hover {
 }
 
 .pl-map-legend__row--toggle {
+    box-sizing: border-box;
     width: 100%;
     border: 0;
     border-top: 1px solid #f0f0f0;
     background: none;
-    font: inherit;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: #333;
     text-align: left;
     cursor: pointer;
     border-radius: 8px;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding: 7px 6px;
     transition: background 0.15s ease;
 }
 
