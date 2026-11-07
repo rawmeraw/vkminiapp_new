@@ -2175,6 +2175,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     var PAID_SOLO_ZOOM = 10;
+    // Концерты с высоким рейтингом вылезают из кластера чуть раньше
+    // обычных (но позже оплаченных).
+    var HIGH_RATED_SOLO_ZOOM = 11;
+    var HIGH_RATED_MIN = 4.0;
 
     function clusterByPixelDistance(px) {
         return {
@@ -2182,11 +2186,18 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 var map = ctx.map;
                 var features = ctx.features;
                 var soloPaid = [];
-                if (map.zoom >= PAID_SOLO_ZOOM) {
+                var soloRated = [];
+                var soloRatedOn = map.zoom >= HIGH_RATED_SOLO_ZOOM;
+                if (map.zoom >= PAID_SOLO_ZOOM || soloRatedOn) {
                     var pool = [];
                     for (var i = 0; i < features.length; i++) {
                         var pr = features[i].properties || {};
-                        if (pr.paid && !pr.featureType) soloPaid.push(features[i]);
+                        if (pr.featureType) {
+                            pool.push(features[i]);
+                            continue;
+                        }
+                        if (pr.paid && map.zoom >= PAID_SOLO_ZOOM) soloPaid.push(features[i]);
+                        else if (soloRatedOn && (Number(pr.rating) || 0) >= HIGH_RATED_MIN) soloRated.push(features[i]);
                         else pool.push(features[i]);
                     }
                     features = pool;
@@ -2234,9 +2245,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 }
 
                 var out = [];
-                // Оплаченные вне кластера — отдельными пинами как есть
+                // Оплаченные и топовые по рейтингу вне кластера —
+                // отдельными пинами как есть
                 for (var sp = 0; sp < soloPaid.length; sp++) {
                     out.push({ lnglat: soloPaid[sp].geometry.coordinates, clusterId: String(soloPaid[sp].id), features: [soloPaid[sp]] });
+                }
+                for (var sr = 0; sr < soloRated.length; sr++) {
+                    out.push({ lnglat: soloRated[sr].geometry.coordinates, clusterId: String(soloRated[sr].id), features: [soloRated[sr]] });
                 }
                 Object.keys(groups).forEach(function (root) {
                     var group = groups[root];
@@ -2296,7 +2311,11 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.YMapDefaultSchemeLayer = ymaps3.YMapDefaultSchemeLayer;
         state.YMapClusterer = YMapClusterer;
         state.YMapMarker = YMapMarker;
-        state.clusterMethod = clusterByPixelDistance(pixelRadiusForZoom);
+        // Радиус считаем на градацию зума меньше: кластеры держатся
+        // дольше при отдалении, издалека точек заметно меньше.
+        state.clusterMethod = clusterByPixelDistance(function (z) {
+            return pixelRadiusForZoom(z - 1);
+        });
         state.schemeLayer = new ymaps3.YMapDefaultSchemeLayer({
             theme: 'light',
             customization: CUSTOMIZATION

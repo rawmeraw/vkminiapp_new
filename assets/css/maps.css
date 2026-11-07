@@ -802,6 +802,12 @@ body.pl-map-fs #map {
     max-height: 0;
     opacity: 0;
     overflow: hidden;
+    box-sizing: border-box;
+    /* Свечение кнопки «Купить билеты» (box-shadow ~19px) резалось по краям
+       details. Отрицательные поля + равный паддинг расширяют clip-box,
+       не сдвигая контент. */
+    margin: -16px;
+    padding: 16px;
     transition: max-height 0.38s ease, opacity 0.28s ease;
 }
 
