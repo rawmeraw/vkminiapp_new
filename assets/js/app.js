@@ -1357,7 +1357,7 @@ function normalizeApiConcert(c){
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     reviews_count: Number(c.reviews_count||0), reviews_avg: (c.reviews_avg==null?null:parseFloat(c.reviews_avg)),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
-    tags: c.tags||[], description:c.description||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
+    tags: c.tags||[], description:c.description||'', description_html: c.description_html||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
     yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||'',
     is_pushkin_card: !!c.is_pushkin_card, pushkin_promo_link: c.pushkin_promo_link||'', pushkin_ad_marking: c.pushkin_ad_marking||''
   };
@@ -1386,6 +1386,7 @@ function normalizeApiEvent(e){
     place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : cityCenterStr()), address:e.address||''}, place_name:placeName,
     bg_color:bg, main_image:img, price:normalizePrice(e.price), cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
     is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||'',
+    description_html: e.description_html||'',
     ticket_brand: e.ticket_brand || e.ticket_vendor || ''
   };
 }
@@ -2252,6 +2253,7 @@ window.PermLiveMapDetailLoader = function(event, done){
       if(!c){ done(null); return; }
       done({
         description: c.description||'',
+        description_html: c.description_html||'',
         tickets: c.tickets||'',
         ticket_brand: c.ticket_vendor||''
       });
@@ -2702,7 +2704,7 @@ function refreshMapMarkers(){
           place:c.place_name||c.place?.name||'', address:c.place?.address||'',
           coordinates:[lng, lat],
           image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false,
-          description:c.description||'', tickets:c.tickets||'',
+          description:c.description||'', description_html:c.description_html||'', tickets:c.tickets||'',
           ticket_brand:c.ticket_brand||c.ticket_vendor||''
         };
       }).filter(e=>e && e.coordinates[0] && e.coordinates[1]);

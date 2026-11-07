@@ -994,15 +994,24 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<span>' + escapeHtml(label) + '</span></a>';
     }
 
+    // Описание приходит готовым HTML с сервера — тот же пайплайн фильтров,
+    // что на детальной (vk_urlize → enhanced_urlize → linebreaks):
+    // VK-разметка [id|имя] → ссылки, URL → <a>, переносы → <br>/<p>.
+    function balloonDescHtml(event) {
+        if (event.description_html) return String(event.description_html);
+        var t = plainMapText(event.description);
+        return t ? escapeHtml(t) : '';
+    }
+
     function buildBalloonDetails(event) {
         var hasLoader = typeof window.PermLiveMapDetailLoader === 'function';
-        var desc = plainMapText(event.description);
+        var descHtml = balloonDescHtml(event);
         var ticket = buildTicketButton(event);
-        if (!desc && !ticket && !hasLoader) return '';
+        if (!descHtml && !ticket && !hasLoader) return '';
         var inner = '';
-        if (desc) inner += '<p class="pl-map-balloon__desc">' + escapeHtml(desc) + '</p>';
+        if (descHtml) inner += '<div class="pl-map-balloon__desc">' + descHtml + '</div>';
         if (ticket) inner += ticket;
-        if (!desc && !ticket) {
+        if (!descHtml && !ticket) {
             inner = '<p class="pl-map-balloon__desc pl-map-balloon__desc--pending">Загрузка…</p>';
         }
         return '<div class="pl-map-balloon__details">' + inner + '</div>';
@@ -1015,7 +1024,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     function balloonHasExpandable(event) {
         if (!event) return false;
-        if (event.description || event.tickets) return true;
+        if (event.description_html || event.description || event.tickets) return true;
         if (event._detailsLoaded) return false;
         return typeof window.PermLiveMapDetailLoader === 'function';
     }
@@ -1041,10 +1050,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (event) expandBalloon(event);
             return;
         }
-        if (dir === 'down' && state.balloonEl.classList.contains('pl-map-balloon--expanded')) {
-            collapseBalloon();
-            return true; // шторка была развёрнута — свайп вниз её сворачивает, а не закрывает
-        }
+        // Свайп вниз закрывает шторку сразу — и в свёрнутом, и в
+        // развёрнутом виде (промежуточного «свернуть» нет).
         return false;
     }
 
@@ -1061,6 +1068,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             event._detailsLoading = false;
             event._detailsLoaded = true;
             if (info) {
+                if (!event.description_html && info.description_html) {
+                    event.description_html = String(info.description_html);
+                }
                 if (!event.description && info.description) event.description = plainMapText(info.description);
                 if (!event.tickets && info.tickets) event.tickets = info.tickets;
                 if (!event.ticket_brand && info.ticket_brand) {
@@ -1069,7 +1079,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             }
             if (state.balloonOpenId !== null && String(state.balloonOpenId) === String(event.id)) {
                 refreshBalloonContent(event);
-                if (!event.description && !event.tickets) collapseBalloon();
+                if (!balloonDescHtml(event) && !event.tickets) collapseBalloon();
             }
         };
         try {

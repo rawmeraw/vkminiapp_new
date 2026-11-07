@@ -576,7 +576,7 @@ body.pl-map-fs #map {
 
 .pl-map-balloon__close {
     position: absolute;
-    top: 8px;
+    top: 15px;
     right: 8px;
     z-index: 5;
     display: flex;
@@ -816,6 +816,19 @@ body.pl-map-fs #map {
     font-size: 0.88rem;
     line-height: 1.5;
     color: #444;
+}
+
+.pl-map-balloon__desc a {
+    color: #e14425;
+    word-break: break-all;
+}
+
+.pl-map-balloon__desc p {
+    margin: 0 0 0.7em;
+}
+
+.pl-map-balloon__desc p:last-child {
+    margin-bottom: 0;
 }
 
 .pl-map-balloon__desc--pending {
