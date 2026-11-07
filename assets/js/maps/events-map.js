@@ -805,8 +805,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function fillClusterBalloon(bodyHtml, isTabbed) {
         state.balloonEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
-            bodyHtml +
-            '<div class="pl-map-balloon__expand-hint"><i class="fas fa-chevron-up" aria-hidden="true"></i><span>Свайп вверх — весь список</span></div>';
+            bodyHtml;
         state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
         state.balloonEl.classList.remove('pl-map-balloon--expanded');
         state.balloonEl.classList.toggle('pl-map-balloon--tabs', isTabbed);
@@ -1039,13 +1038,16 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.balloonEl.classList.remove('pl-map-balloon--expanded');
     }
 
+    // Свайп вверх имеет смысл только для одиночного события с деталями:
+    // кластеры/списки концертов — просто скроллятся, без разворачивания.
+    function canBalloonSwipeUp() {
+        if (state.balloonEl.classList.contains('pl-map-balloon--expanded')) return false;
+        var event = balloonEvent();
+        return !!(event && balloonHasExpandable(event));
+    }
+
     function onBalloonSwipe(dir) {
         if (dir === 'up') {
-            // Кластерный список тоже разворачиваем на весь экран.
-            if (state.balloonOpenId === 'cluster') {
-                state.balloonEl.classList.add('pl-map-balloon--expanded');
-                return;
-            }
             var event = balloonEvent();
             if (event) expandBalloon(event);
             return;
@@ -1270,9 +1272,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var ME = (window.PermLiveMapData && window.PermLiveMapData.mapUser) || { is_auth: false, name: '', avatar: '', is_staff: false };
 
     // onSwipeDir(dir) — необязательный хук: 'up' (свайп вверх) и 'down'
-    // (свайп вниз). Для 'down' возврат true «съедает» жест (шторка
-    // развернулась → свайп вниз её сворачивает, а не закрывает).
-    function attachSwipeClose(el, onClose, onSwipeDir) {
+    // (свайп вниз). Для 'down' возврат true «съедает» жест.
+    // canSwipeUp() — разрешает перехватывать свайп вверх. Без него
+    // вертикальные жесты внутри скроллящейся шторки остаются нативными.
+    function attachSwipeClose(el, onClose, onSwipeDir, canSwipeUp) {
         if (!el || el.__plSwipe) return;
         el.__plSwipe = true;
 
@@ -1298,6 +1301,19 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             var dy = e.touches[0].clientY - startY;
             lastDy = dy;
             if (Math.abs(dy) <= 4) return;
+            // Свайп вверх — наш жест только там, где есть что разворачивать
+            // (canSwipeUp). Иначе это нативная прокрутка контента шторки —
+            // отпускаем жест и не preventDefault'им, иначе страница
+            // «замирает» и описание не пролистать.
+            if (dy < 0 && !(typeof canSwipeUp === 'function' && canSwipeUp())) {
+                startY = null;
+                lastDy = 0;
+                tracking = false;
+                dragging = false;
+                el.style.transition = '';
+                el.style.transform = '';
+                return;
+            }
             tracking = true;
             dragging = true;
             if (e.cancelable) e.preventDefault();
@@ -2296,7 +2312,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
            чтобы не было дубля. На всякий случай прячем его и через CSS. */
 
         state.balloonEl = buildBalloon();
-        attachSwipeClose(state.balloonEl, closeBalloon, onBalloonSwipe);
+        attachSwipeClose(state.balloonEl, closeBalloon, onBalloonSwipe, canBalloonSwipeUp);
         state.mapEl.appendChild(state.balloonEl);
         state.mapEl.appendChild(buildControls());
 

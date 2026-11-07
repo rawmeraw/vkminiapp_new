@@ -1629,10 +1629,6 @@ a.pl-map-balloon__venue-name:hover {
         max-height: 94vh;
     }
 
-    .pl-map-balloon--list.pl-map-balloon--expanded {
-        max-height: 94vh;
-    }
-
     .pl-map-balloon__expand-hint {
         display: flex;
     }
