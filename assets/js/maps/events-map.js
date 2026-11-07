@@ -805,7 +805,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function fillClusterBalloon(bodyHtml, isTabbed) {
         state.balloonEl.innerHTML =
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
-            bodyHtml;
+            bodyHtml +
+            '<div class="pl-map-balloon__expand-hint"><i class="fas fa-chevron-up" aria-hidden="true"></i><span>Свайп вверх — весь список</span></div>';
         state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
         state.balloonEl.classList.remove('pl-map-balloon--expanded');
         state.balloonEl.classList.toggle('pl-map-balloon--tabs', isTabbed);
@@ -1031,6 +1032,11 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     function onBalloonSwipe(dir) {
         if (dir === 'up') {
+            // Кластерный список тоже разворачиваем на весь экран.
+            if (state.balloonOpenId === 'cluster') {
+                state.balloonEl.classList.add('pl-map-balloon--expanded');
+                return;
+            }
             var event = balloonEvent();
             if (event) expandBalloon(event);
             return;

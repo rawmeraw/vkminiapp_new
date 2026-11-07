@@ -795,17 +795,19 @@ body.pl-map-fs #map {
     color: #2f9e44;
 }
 
-/* «Свайп вверх»: описание + кнопка покупки (видны только в --expanded) */
+/* «Свайп вверх»: описание + кнопка покупки.
+   Не display:none→block (контент «выпрыгивал» резко), а раскрытие
+   по max-height + fade — шторка плавно «доставляет» блок снизу. */
 .pl-map-balloon__details {
-    display: none;
-}
-
-.pl-map-balloon__details:empty {
-    display: none;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.38s ease, opacity 0.28s ease;
 }
 
 .pl-map-balloon--expanded .pl-map-balloon__details {
-    display: block;
+    max-height: 6000px;
+    opacity: 1;
 }
 
 .pl-map-balloon__desc {
@@ -906,9 +908,10 @@ body.pl-map-fs #map {
     align-items: center;
     justify-content: center;
     gap: 5px;
-    margin-top: 4px;
-    font-family: 'Jost', Arial, sans-serif;
-    font-size: 0.72rem;
+    margin-top: 16px;
+    padding-bottom: 6px;
+    font-family: 'Jost Light', 'Jost', Arial, sans-serif;
+    font-size: 0.75rem;
     color: #999;
 }
 
@@ -1587,7 +1590,7 @@ a.pl-map-balloon__venue-name:hover {
         overscroll-behavior: contain;
         border-radius: 18px 18px 0 0;
         box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.2);
-        padding: 18px 18px calc(18px + var(--pl-map-bottom, env(safe-area-inset-bottom, 0px)));
+        padding: 18px 18px calc(30px + var(--pl-map-bottom, env(safe-area-inset-bottom, 0px)));
         transform: translateY(110%);
         transition: opacity 0.2s ease, transform 0.28s ease, visibility 0.2s, max-height 0.25s ease, min-height 0.25s ease;
     }
@@ -1610,7 +1613,11 @@ a.pl-map-balloon__venue-name:hover {
 
     .pl-map-balloon--expanded {
         min-height: 55vh;
-        max-height: 82vh;
+        max-height: 94vh;
+    }
+
+    .pl-map-balloon--list.pl-map-balloon--expanded {
+        max-height: 94vh;
     }
 
     .pl-map-balloon__expand-hint {
