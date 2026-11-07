@@ -41,7 +41,7 @@
     };
 
     // Цвета типов событий: extreme — Экстрим (чёрный, тяжелее рока),
-    // hard — Рок и тяжёлое (оранжевый), academic — Акустика и классика
+    // hard — Рок и акустика (оранжевый), academic — Классика и джаз
     // (светлая олива), pop — Поп и электроника (электрик-синий),
     // other — Прочее (серый).
     var GENRE_COLORS = {
@@ -55,8 +55,8 @@
     // Подписи для легенды карты (порядок = порядок строк).
     var GENRE_LABELS = {
         'extreme': 'Экстрим',
-        'hard': 'Рок и тяжёлое',
-        'academic': 'Акустика и классика',
+        'hard': 'Рок и акустика',
+        'academic': 'Классика и джаз',
         'pop': 'Поп и электроника',
         'other': 'Прочее'
     };
@@ -108,14 +108,19 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     // Тип события для цвета/фильтра: extreme важнее всех — чёрный пин,
     // даже если первым тегом идёт другой тип. Иначе — первый тег.
     function primaryTagType(event) {
+        // Приоритет типа: extreme > hard > academic > pop > other.
+        // Сканируем все теги — extreme перекрывает остальные, «other»
+        // не должен перекрывать цветной тип.
+        var rank = { extreme: 4, hard: 3, academic: 2, pop: 1, other: 0 };
         var tags = (event && event.tags) || [];
-        var first = '';
+        var best = '';
+        var bestRank = -1;
         for (var i = 0; i < tags.length; i++) {
             var t = String((tags[i] && tags[i].type) || '').toLowerCase();
-            if (t === 'extreme') return 'extreme';
-            if (!first) first = t;
+            var r = rank.hasOwnProperty(t) ? rank[t] : 0;
+            if (r > bestRank) { bestRank = r; best = t; }
         }
-        return first;
+        return best;
     }
 
     function genreColor(event) {
@@ -455,6 +460,21 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return btn;
     }
 
+    function hexToHue(hex) {
+        var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+        if (!m) return 0;
+        var r = parseInt(m[1].slice(0, 2), 16) / 255;
+        var g = parseInt(m[1].slice(2, 4), 16) / 255;
+        var b = parseInt(m[1].slice(4, 6), 16) / 255;
+        var max = Math.max(r, g, b), min = Math.min(r, g, b);
+        if (max === min) return 0;
+        var d = max - min, h;
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        return h * 60;
+    }
+
     function buildClusterPin(count, features, coordinates) {
         var circle = el('button', 'pl-map-cluster');
         circle.type = 'button';
@@ -467,6 +487,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         // Тонкие светлые разделители между секторами: без них соседние
         // цвета (особенно тёмная олива) сливаются в грязное «облако».
         var keys = Object.keys(counts);
+        // Сектора по цветовому кругу: контрастные жанры не липнут
+        // друг к другу, смесь на стыках выглядит чище.
+        keys.sort(function (a, b) { return hexToHue(a) - hexToHue(b); });
         var GAP = keys.length > 1 ? 1.4 : 0;
         var stops = [];
         var acc = 0;
@@ -784,6 +807,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
             bodyHtml;
         state.balloonEl.classList.add('pl-map-balloon--open', 'pl-map-balloon--list');
+        state.balloonEl.classList.remove('pl-map-balloon--expanded');
         state.balloonEl.classList.toggle('pl-map-balloon--tabs', isTabbed);
         try { state.balloonEl.scrollTop = 0; } catch (e) {}
         setBalloonActive(null);
@@ -896,13 +920,177 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
         var head = '<div class="pl-map-balloon__head">' + img + '<div class="pl-map-balloon__head-main"><h3 class="pl-map-balloon__title"><a href="' + escapeAttr(event.url) + '">' + escapeHtml(event.title) + '</a></h3>' + tags + '</div></div>';
 
+        var detailsHtml = buildBalloonDetails(event);
+        var hintHtml = detailsHtml
+            ? '<div class="pl-map-balloon__expand-hint"><i class="fas fa-chevron-up" aria-hidden="true"></i><span>Свайп вверх — подробнее</span></div>'
+            : '';
+
         return '<button type="button" class="pl-map-balloon__close" aria-label="Закрыть">&times;</button>' +
             head +
             (event.place ? '<p class="pl-map-balloon__place">' + placeText + '</p>' : '') +
             price +
             (timeText ? '<p class="pl-map-balloon__time">' + timeText + '</p>' : '') +
             free +
-            '<div class="pl-map-balloon__actions">' + aboutBtn + routeBtn + '</div>';
+            detailsHtml +
+            '<div class="pl-map-balloon__actions">' + aboutBtn + routeBtn + '</div>' +
+            hintHtml;
+    }
+
+    // ---------- «Свайп вверх»: описание + кнопка покупки ----------
+
+    var TICKET_LOGO_BASE = './assets/img/';
+    var TICKET_BRAND_META = {
+        yandex: { cls: 'yandex', logo: 'yandex_afisha.svg', alt: 'Яндекс.Афиша' },
+        afisha: { cls: 'afisha', logo: 'afisha.svg', alt: 'Афиша' },
+        ticketland: { cls: 'ticketland', logo: 'ticketland.svg', alt: 'Ticketland' },
+        mts: { cls: 'mts', logo: 'mts.webp', alt: 'MTS Live' }
+    };
+
+    function plainMapText(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.innerHTML = String(s);
+        var t = (d.textContent || '').replace(/\s+/g, ' ').trim();
+        return t.length > 1500 ? t.slice(0, 1500).replace(/\s+\S*$/, '') + '…' : t;
+    }
+
+    function normalizeTicketBrand(b) {
+        b = String(b || '').toLowerCase();
+        return TICKET_BRAND_META[b] ? b : '';
+    }
+
+    // Локальный фолбэк определения бренда по URL (зеркало ticket_utils.get_ticket_brand;
+    // permlive-шорты без dl= здесь не резолвятся — их бренд приходит с сервера).
+    function guessTicketBrand(url) {
+        var u = String(url || '').toLowerCase();
+        if (!u) return '';
+        var target = u;
+        try {
+            var dm = /[?&]dl=([^&]+)/.exec(u);
+            if (dm) target = decodeURIComponent(dm[1]).split('?')[0].split('#')[0];
+        } catch (e) {}
+        if (target.indexOf('afisha.ru') !== -1 || target.indexOf('yyczo.com') !== -1) return 'afisha';
+        var erid = /erid=([^&\s]+)/.exec(u);
+        if (target.indexOf('afisha.yandex.ru') !== -1 || (erid && /^\d/.test(erid[1]))) return 'yandex';
+        if (target.indexOf('ticketland.ru') !== -1) return 'ticketland';
+        if (target.indexOf('live.mts.ru') !== -1 || target.indexOf('mts.ru') !== -1 ||
+            u.indexOf('cake.permlive.ru/go') !== -1 || u.indexOf('/go/') !== -1) return 'mts';
+        return '';
+    }
+
+    function buildTicketButton(event) {
+        var url = event.tickets;
+        if (!url) return '';
+        var brand = normalizeTicketBrand(event.ticket_brand || event.ticket_vendor) || guessTicketBrand(url);
+        var meta = TICKET_BRAND_META[brand] || null;
+        var label = event.price === 0 ? 'Бесплатно'
+            : 'Купить билеты' + (event.price > 0 ? ' от ' + event.price + ' ₽' : '');
+        var inner = meta
+            ? '<img src="' + TICKET_LOGO_BASE + meta.logo + '" alt="' + meta.alt + '" loading="lazy" decoding="async">'
+            : '<i class="fas fa-ticket" aria-hidden="true"></i>';
+        return '<a class="pl-map-balloon__ticket' + (meta ? ' pl-map-balloon__ticket--' + meta.cls : '') +
+            '" href="' + escapeAttr(url) + '" target="_blank" rel="noopener">' + inner +
+            '<span>' + escapeHtml(label) + '</span></a>';
+    }
+
+    function buildBalloonDetails(event) {
+        var hasLoader = typeof window.PermLiveMapDetailLoader === 'function';
+        var desc = plainMapText(event.description);
+        var ticket = buildTicketButton(event);
+        if (!desc && !ticket && !hasLoader) return '';
+        var inner = '';
+        if (desc) inner += '<p class="pl-map-balloon__desc">' + escapeHtml(desc) + '</p>';
+        if (ticket) inner += ticket;
+        if (!desc && !ticket) {
+            inner = '<p class="pl-map-balloon__desc pl-map-balloon__desc--pending">Загрузка…</p>';
+        }
+        return '<div class="pl-map-balloon__details">' + inner + '</div>';
+    }
+
+    function balloonEvent() {
+        if (!state.balloonOpenId || state.balloonOpenId === 'cluster') return null;
+        return findEvent(state.balloonOpenId);
+    }
+
+    function balloonHasExpandable(event) {
+        if (!event) return false;
+        if (event.description || event.tickets) return true;
+        if (event._detailsLoaded) return false;
+        return typeof window.PermLiveMapDetailLoader === 'function';
+    }
+
+    function expandBalloon(event) {
+        if (!balloonHasExpandable(event)) return;
+        state.balloonEl.classList.add('pl-map-balloon--expanded');
+        ensureBalloonDetails(event);
+    }
+
+    function collapseBalloon() {
+        state.balloonEl.classList.remove('pl-map-balloon--expanded');
+    }
+
+    function onBalloonSwipe(dir) {
+        if (dir === 'up') {
+            var event = balloonEvent();
+            if (event) expandBalloon(event);
+            return;
+        }
+        if (dir === 'down' && state.balloonEl.classList.contains('pl-map-balloon--expanded')) {
+            collapseBalloon();
+            return true; // шторка была развёрнута — свайп вниз её сворачивает, а не закрывает
+        }
+        return false;
+    }
+
+    // Если описания/билетов нет в payload карты — догружаем деталку через
+    // хук хоста (VK Mini App: /api/concert/<slug>/) и перерисовываем шторку.
+    function ensureBalloonDetails(event) {
+        if (!event || event._detailsLoaded || event._detailsLoading) return;
+        if (typeof window.PermLiveMapDetailLoader !== 'function') {
+            event._detailsLoaded = true;
+            return;
+        }
+        event._detailsLoading = true;
+        var done = function (info) {
+            event._detailsLoading = false;
+            event._detailsLoaded = true;
+            if (info) {
+                if (!event.description && info.description) event.description = plainMapText(info.description);
+                if (!event.tickets && info.tickets) event.tickets = info.tickets;
+                if (!event.ticket_brand && info.ticket_brand) {
+                    event.ticket_brand = normalizeTicketBrand(info.ticket_brand);
+                }
+            }
+            if (state.balloonOpenId !== null && String(state.balloonOpenId) === String(event.id)) {
+                refreshBalloonContent(event);
+                if (!event.description && !event.tickets) collapseBalloon();
+            }
+        };
+        try {
+            window.PermLiveMapDetailLoader(event, done);
+        } catch (e) {
+            done(null);
+        }
+    }
+
+    function refreshBalloonContent(event) {
+        var expanded = state.balloonEl.classList.contains('pl-map-balloon--expanded');
+        var scrollTop = 0;
+        try { scrollTop = state.balloonEl.scrollTop; } catch (e) {}
+        paintBalloon(event);
+        state.balloonEl.classList.add('pl-map-balloon--open');
+        state.balloonEl.classList.remove('pl-map-balloon--list');
+        state.balloonEl.classList.remove('pl-map-balloon--tabs');
+        state.balloonEl.classList.toggle('pl-map-balloon--expanded', expanded);
+        try { state.balloonEl.scrollTop = scrollTop; } catch (e) {}
+    }
+
+    function paintBalloon(event) {
+        state.balloonEl.innerHTML = buildBalloonContent(event);
+        var likeBtn = state.balloonEl.querySelector('.pl-map-balloon__like[data-like-id]');
+        if (likeBtn) {
+            likeBtn.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); toggleMapLike(event, likeBtn); });
+        }
     }
 
     function openBalloon(event, pinEl) {
@@ -916,16 +1104,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         }
         state.activePinEl = livePin;
 
-        state.balloonEl.innerHTML = buildBalloonContent(event);
-
-        var likeBtn = state.balloonEl.querySelector('.pl-map-balloon__like[data-like-id]');
-        if (likeBtn) {
-            likeBtn.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); toggleMapLike(event, likeBtn); });
-        }
+        paintBalloon(event);
 
         state.balloonEl.classList.add('pl-map-balloon--open');
         state.balloonEl.classList.remove('pl-map-balloon--list');
         state.balloonEl.classList.remove('pl-map-balloon--tabs');
+        state.balloonEl.classList.remove('pl-map-balloon--expanded');
         setBalloonActive(event.id);
         updateBalloonPosition();
         state.balloonOpenedAt = Date.now();
@@ -994,6 +1178,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.balloonEl.classList.remove('pl-map-balloon--anchored');
         state.balloonEl.classList.remove('pl-map-balloon--list');
         state.balloonEl.classList.remove('pl-map-balloon--tabs');
+        state.balloonEl.classList.remove('pl-map-balloon--expanded');
         state.balloonEl.style.left = '';
         state.balloonEl.style.top = '';
         state.balloonEl.style.transform = '';
@@ -1068,11 +1253,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     ];
     var ME = (window.PermLiveMapData && window.PermLiveMapData.mapUser) || { is_auth: false, name: '', avatar: '', is_staff: false };
 
-    function attachSwipeClose(el, onClose) {
+    // onSwipeDir(dir) — необязательный хук: 'up' (свайп вверх) и 'down'
+    // (свайп вниз). Для 'down' возврат true «съедает» жест (шторка
+    // развернулась → свайп вниз её сворачивает, а не закрывает).
+    function attachSwipeClose(el, onClose, onSwipeDir) {
         if (!el || el.__plSwipe) return;
         el.__plSwipe = true;
 
         var startY = null;
+        var lastDy = 0;
         var tracking = false;
         var dragging = false;
 
@@ -1082,6 +1271,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (e.touches.length !== 1) return;
             if (el.scrollTop > 0) return;
             startY = e.touches[0].clientY;
+            lastDy = 0;
             tracking = false;
             dragging = false;
             el.style.transition = 'none';
@@ -1090,26 +1280,37 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         function touchMove(e) {
             if (startY === null) return;
             var dy = e.touches[0].clientY - startY;
-            if (dy <= 4) {
-                if (dy < -2) touchEnd();
-                return;
-            }
+            lastDy = dy;
+            if (Math.abs(dy) <= 4) return;
             tracking = true;
             dragging = true;
             if (e.cancelable) e.preventDefault();
-            el.style.transform = 'translateY(' + Math.round(dy) + 'px)';
+            // Вниз — шторка едет за пальцем; вверх — лёгкое «приподнимание»
+            // с сопротивлением (сигнал «потяни, чтобы развернуть»).
+            el.style.transform = dy > 0
+                ? 'translateY(' + Math.round(dy) + 'px)'
+                : 'translateY(' + Math.round(dy * 0.3) + 'px)';
         }
 
         function touchEnd() {
             if (startY === null) return;
-            var dy = dragging ? (parseFloat(el.style.transform.replace(/[^0-9.\-]/g, '')) || 0) : 0;
-            var closing = tracking && (dy > 90 || dy > el.offsetHeight * 0.25);
+            var dy = lastDy;
+            var up = tracking && dy < -56;
+            var down = tracking && (dy > 90 || dy > el.offsetHeight * 0.25);
             startY = null;
+            lastDy = 0;
             tracking = false;
             dragging = false;
             el.style.transition = '';
             el.style.transform = '';
-            if (closing) onClose();
+            if (up && typeof onSwipeDir === 'function') {
+                onSwipeDir('up');
+                return;
+            }
+            if (down) {
+                if (typeof onSwipeDir === 'function' && onSwipeDir('down')) return;
+                onClose();
+            }
         }
 
         el.addEventListener('touchstart', touchStart, { passive: true });
@@ -1777,8 +1978,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
         var filterDefs = [
             { key: 'extreme', label: 'Экстрим', cls: 'pl-map-filter-btn--extreme', icon: '<i class="fas fa-skull" aria-hidden="true"></i>' },
-            { key: 'hard', label: 'Рок и тяжёлое', cls: 'pl-map-filter-btn--hard', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
-            { key: 'academic', label: 'Акустика и классика', cls: 'pl-map-filter-btn--academic', icon: '<i class="fas fa-feather" aria-hidden="true"></i>' },
+            { key: 'hard', label: 'Рок и акустика', cls: 'pl-map-filter-btn--hard', icon: '<i class="fas fa-guitar" aria-hidden="true"></i>' },
+            { key: 'academic', label: 'Классика и джаз', cls: 'pl-map-filter-btn--academic', icon: '<i class="fas fa-feather" aria-hidden="true"></i>' },
             { key: 'pop', label: 'Поп и электроника', cls: 'pl-map-filter-btn--pop', icon: '<i class="fas fa-compact-disc" aria-hidden="true"></i>' }
         ];
         for (var fi = 0; fi < filterDefs.length; fi++) {
@@ -1862,12 +2063,13 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function pixelRadiusForZoom(zoom) {
-        if (zoom >= 15) return 70;
-        if (zoom >= 14) return 85;
-        if (zoom >= 13) return 95;
-        if (zoom >= 12) return 110;
-        if (zoom >= 11) return 115;
-        return 120;
+        // Компактнее: кластеры распадаются раньше, точки лежат локальнее.
+        if (zoom >= 15) return 55;
+        if (zoom >= 14) return 66;
+        if (zoom >= 13) return 74;
+        if (zoom >= 12) return 86;
+        if (zoom >= 11) return 90;
+        return 95;
     }
 
     function markerZIndex(lnglat) {
@@ -2062,7 +2264,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
            чтобы не было дубля. На всякий случай прячем его и через CSS. */
 
         state.balloonEl = buildBalloon();
-        attachSwipeClose(state.balloonEl, closeBalloon);
+        attachSwipeClose(state.balloonEl, closeBalloon, onBalloonSwipe);
         state.mapEl.appendChild(state.balloonEl);
         state.mapEl.appendChild(buildControls());
 

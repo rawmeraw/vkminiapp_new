@@ -1385,7 +1385,8 @@ function normalizeApiEvent(e){
     id:e.id||Math.floor(Math.random()*1e6), title:e.title, slug, date:e.date, time:(e.time||'19:00').slice(0,5),
     place:{name:placeName, coordinates: (e.coordinates? e.coordinates.join(',') : cityCenterStr()), address:e.address||''}, place_name:placeName,
     bg_color:bg, main_image:img, price:normalizePrice(e.price), cached_rating:String(e.rating||'4.0'), display_rating:String(e.rating||'4.0'),
-    is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||''
+    is_paid:!!e.paid, tickets:e.tickets||'', tags:e.tags||[], description:e.description||'',
+    ticket_brand: e.ticket_brand || e.ticket_vendor || ''
   };
 }
 
@@ -2241,6 +2242,22 @@ function ticketBtnHTML(tickets, price, vendor){
   if(v==='afisha') return `<a class="detail-ticket detail-ticket--afisha" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/afisha.svg" alt="Афиша"><span>Есть билеты на Афише</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
+// Хук для карты (events-map.js): «свайп вверх» на пине догружает описание
+// и билетную ссылку, которых нет в коротком payload /api/concerts.
+window.PermLiveMapDetailLoader = function(event, done){
+  const slug = event.slug || extractSlug(event.url||'');
+  if(!slug){ done(null); return; }
+  fetchJSON(`${API_BASE}/api/concert/${encodeURIComponent(slug)}/?${cityQuery()}`)
+    .then(function(c){
+      if(!c){ done(null); return; }
+      done({
+        description: c.description||'',
+        tickets: c.tickets||'',
+        ticket_brand: c.ticket_vendor||''
+      });
+    })
+    .catch(function(){ done(null); });
+};
 function yandexPromosHTML(c){
   // Блок промокодов Яндекс Афиши (зеркало homepage/blocks/yandex_promocodes.html).
   const promos = c.yandex_promocodes || [];
@@ -2679,12 +2696,14 @@ function refreshMapMarkers(){
         // Раньше сюда подставлялся центр Перми — он и тянул камеру в чужой город.
         if(!isFinite(lat) || !isFinite(lng)) return null;
         return {
-          id:c.id, title:c.title, url:siteEventUrl(c.slug||''),
+          id:c.id, slug:c.slug||'', title:c.title, url:siteEventUrl(c.slug||''),
           date:c.date, time:c.time||'', price:c.price||0, paid:!!c.is_paid, rating:parseFloat(c.cached_rating||3),
           start_ms:cityStartMs(c.date, c.time),
           place:c.place_name||c.place?.name||'', address:c.place?.address||'',
           coordinates:[lng, lat],
-          image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false
+          image:c.main_image||'', tags:(c.tags||[]).map(t=>({name:t.name, type:t.type||'other'})), is_liked:false, is_foryou:false,
+          description:c.description||'', tickets:c.tickets||'',
+          ticket_brand:c.ticket_brand||c.ticket_vendor||''
         };
       }).filter(e=>e && e.coordinates[0] && e.coordinates[1]);
       window.PermLiveMapData = window.PermLiveMapData||{};

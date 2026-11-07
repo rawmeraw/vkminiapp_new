@@ -795,6 +795,131 @@ body.pl-map-fs #map {
     color: #2f9e44;
 }
 
+/* «Свайп вверх»: описание + кнопка покупки (видны только в --expanded) */
+.pl-map-balloon__details {
+    display: none;
+}
+
+.pl-map-balloon__details:empty {
+    display: none;
+}
+
+.pl-map-balloon--expanded .pl-map-balloon__details {
+    display: block;
+}
+
+.pl-map-balloon__desc {
+    margin: 0 0 12px;
+    font-family: 'Jost', Arial, sans-serif;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #444;
+}
+
+.pl-map-balloon__desc--pending {
+    color: #999;
+    font-style: italic;
+}
+
+.pl-map-balloon__ticket {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 12px;
+    padding: 0.8rem 1.2rem;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Jost', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #fff;
+    background: linear-gradient(135deg, #e14425 0%, #ff6b4a 100%);
+    box-shadow: 0 4px 15px rgba(225, 68, 37, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pl-map-balloon__ticket::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s ease;
+}
+
+.pl-map-balloon__ticket:hover::before {
+    left: 100%;
+}
+
+.pl-map-balloon__ticket:hover {
+    transform: translateY(-1px);
+    color: #fff;
+}
+
+.pl-map-balloon__ticket img {
+    width: 1.35rem;
+    height: 1.35rem;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+.pl-map-balloon__ticket span {
+    color: #fff;
+}
+
+.pl-map-balloon__ticket--yandex {
+    background: linear-gradient(135deg, #ffcc00 0%, #ffd700 100%);
+    color: #000;
+    box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pl-map-balloon__ticket--yandex img {
+    filter: none;
+}
+
+.pl-map-balloon__ticket--yandex span,
+.pl-map-balloon__ticket--yandex i {
+    color: #000;
+}
+
+.pl-map-balloon__ticket--afisha {
+    background: #b0154f;
+    box-shadow: 0 4px 15px rgba(176, 21, 79, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.pl-map-balloon__ticket--ticketland,
+.pl-map-balloon__ticket--mts {
+    background: linear-gradient(135deg, #e30611 0%, #ff1f2a 100%);
+    box-shadow: 0 4px 15px rgba(227, 6, 17, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.pl-map-balloon__expand-hint {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 4px;
+    font-family: 'Jost', Arial, sans-serif;
+    font-size: 0.72rem;
+    color: #999;
+}
+
+.pl-map-balloon__expand-hint i {
+    font-size: 0.65rem;
+}
+
+.pl-map-balloon--expanded .pl-map-balloon__expand-hint {
+    display: none;
+}
+
 .pl-map-balloon__actions {
     display: flex;
     gap: 8px;
@@ -1464,7 +1589,7 @@ a.pl-map-balloon__venue-name:hover {
         box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.2);
         padding: 18px 18px calc(18px + var(--pl-map-bottom, env(safe-area-inset-bottom, 0px)));
         transform: translateY(110%);
-        transition: opacity 0.2s ease, transform 0.28s ease, visibility 0.2s;
+        transition: opacity 0.2s ease, transform 0.28s ease, visibility 0.2s, max-height 0.25s ease, min-height 0.25s ease;
     }
 
     .pl-map-balloon::before {
@@ -1481,6 +1606,15 @@ a.pl-map-balloon__venue-name:hover {
 
     .pl-map-balloon--open {
         transform: translateY(0);
+    }
+
+    .pl-map-balloon--expanded {
+        min-height: 55vh;
+        max-height: 82vh;
+    }
+
+    .pl-map-balloon__expand-hint {
+        display: flex;
     }
 }
 
