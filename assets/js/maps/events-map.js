@@ -1892,16 +1892,14 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var vv = window.visualViewport;
         var bottomReserve = safeAreaInsetBottom();
 
-        if (svh > 0 && layoutH > svh) {
-            bottomReserve += (layoutH - svh);
-        }
         var vh;
-        if (svh > 0) {
-
-            vh = svh;
-        } else if (vv && vv.height) {
-
+        if (vv && vv.height) {
+            /* visualViewport — реальная видимая высота: пересчитывается
+               при показе/скрытии строки URL браузера, поэтому карта
+               всегда доходит до низа экрана без белой полосы. */
             vh = (vv.offsetTop || 0) + vv.height;
+        } else if (svh > 0) {
+            vh = svh;
         } else {
             vh = layoutH;
         }
@@ -2120,6 +2118,24 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return 95;
     }
 
+    // Растровый слой фич (markers) обязан лежать ВЫШЕ всех векторных
+    // подслоёв схемы (icons и др.) — иначе ymaps3 ругается в консоль.
+    // Считаем z-index от реальных значений схемы, а не хардкодом.
+    function featuresLayerZIndex() {
+        try {
+            var layers = state.YMapDefaultSchemeLayer && state.YMapDefaultSchemeLayer.defaultProps && state.YMapDefaultSchemeLayer.defaultProps.layers;
+            if (layers) {
+                var max = -Infinity;
+                Object.keys(layers).forEach(function (k) {
+                    var z = layers[k] && layers[k].zIndex;
+                    if (isFinite(z) && z > max) max = z;
+                });
+                if (isFinite(max)) return max + 100;
+            }
+        } catch (e) {}
+        return 5000;
+    }
+
     function markerZIndex(lnglat) {
         var lat = lnglat[1], lng = lnglat[0];
         return Math.round((90 - lat) * 1e4 + (lng + 180) * 10);
@@ -2321,7 +2337,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             customization: CUSTOMIZATION
         });
         map.addChild(state.schemeLayer);
-        map.addChild(new ymaps3.YMapDefaultFeaturesLayer({ zIndex: 1800 }));
+        map.addChild(new ymaps3.YMapDefaultFeaturesLayer({ zIndex: featuresLayerZIndex() }));
 
         state.clusterer = createClusterer();
         map.addChild(state.clusterer);

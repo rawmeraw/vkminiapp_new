@@ -1044,6 +1044,23 @@ function loadCitiesYmaps(){
   return citiesYmapsPromise;
 }
 
+// Растровый слой фич (markers) обязан лежать ВЫШЕ всех векторных
+// подслоёв схемы (icons и др.) — иначе ymaps3 ругается в консоль.
+function featuresLayerZIndex(ymaps3){
+  try{
+    const layers = ymaps3.YMapDefaultSchemeLayer && ymaps3.YMapDefaultSchemeLayer.defaultProps && ymaps3.YMapDefaultSchemeLayer.defaultProps.layers;
+    if(layers){
+      let max = -Infinity;
+      Object.keys(layers).forEach(function(k){
+        const z = layers[k] && layers[k].zIndex;
+        if(isFinite(z) && z > max) max = z;
+      });
+      if(isFinite(max)) return max + 100;
+    }
+  }catch(e){}
+  return 5000;
+}
+
 function refreshCitiesPins(){
   try{
     document.querySelectorAll('#cities-russia-map .cities-map-pin').forEach(function(pin){
@@ -1103,7 +1120,7 @@ function ensureCitiesMap(){
     citiesMap._plSig = mapSig;
     try{ if(typeof map.zoom === 'number') citiesMapZoom = map.zoom; }catch(e){}
     map.addChild(new ymaps3.YMapDefaultSchemeLayer({theme: 'light'}));
-    map.addChild(new ymaps3.YMapDefaultFeaturesLayer({zIndex: 1800}));
+    map.addChild(new ymaps3.YMapDefaultFeaturesLayer({zIndex: featuresLayerZIndex(ymaps3)}));
     pts.forEach(function(p){
       const btn = document.createElement('button');
       btn.type = 'button';
