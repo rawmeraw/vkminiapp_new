@@ -2290,12 +2290,14 @@ function yandexPromosHTML(c){
       + `<button type="button" class="vk-promo-code" data-code="${esc(p.code||'')}" onclick="copyVkPromo(this)">`
       + `<span class="vk-promo-code-text">${esc(p.code||'')}</span> <i class="fa-solid fa-copy"></i></button> `
       + `<a class="vk-promo-link" href="${esc(p.referral_link||'')}" target="_blank" rel="noopener">Перейти к покупке</a>`
-      + `</div></div>`;
+      + `</div></div>`
+      + (p.ad_marking ? `<p class="vk-promo-ad">${esc(p.ad_marking)}</p>` : '');
   }).join('');
+  const hasMarking = promos.some(p=>p.ad_marking);
   return `<div class="vk-promo-box"><h3>Скидки на билеты</h3>`
     + `<p class="vk-promo-sub">Вводить промокод нужно в мобильном приложении Яндекс.Афиша.<br>Минимальная сумма заказа со скидкой: 2000 ₽</p>`
     + items
-    + (c.yandex_promo_ad_marking ? `<p class="vk-promo-ad">${esc(c.yandex_promo_ad_marking)}</p>` : '')
+    + (!hasMarking && c.yandex_promo_ad_marking ? `<p class="vk-promo-ad">${esc(c.yandex_promo_ad_marking)}</p>` : '')
     + `</div>`;
 }
 window.copyVkPromo = function(btn){
