@@ -922,6 +922,24 @@ body.pl-map-fs #map {
     box-shadow: 0 4px 15px rgba(227, 6, 17, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+.pl-map-balloon__ticket--kassir {
+    background: linear-gradient(135deg, #ff7b1d 0%, #ff9a3d 100%);
+    color: #222;
+    box-shadow: 0 4px 15px rgba(255, 123, 29, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pl-map-balloon__ticket--kassir img {
+    filter: none;
+    width: auto;
+    height: 1.05rem;
+    max-width: 4rem;
+}
+
+.pl-map-balloon__ticket--kassir span,
+.pl-map-balloon__ticket--kassir i {
+    color: #222;
+}
+
 .pl-map-balloon__expand-hint {
     display: none;
     align-items: center;

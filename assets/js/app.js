@@ -2244,6 +2244,8 @@ function ticketVendor(url){
   // afisha.ru/yyczo.com (Admitad) — до yandex-эвристики: их erid=5jtCe...
   // тоже начинается с цифры и иначе ловился бы правилом «erid на цифру».
   if(u.includes('afisha.ru') || u.includes('yyczo.com')) return 'afisha';
+  // KASSIR (vxrlm/kassir.ru) — до yandex-эвристики: erid=25H8... с цифры.
+  if(u.includes('vxrlm.com') || u.includes('kassir.ru')) return 'kassir';
   if(u.includes('afisha.yandex.ru') || (m && /^\d/.test(m[1]))) return 'yandex';
   if(u.includes('cake.permlive.ru/go')) return 'mts';
   if(u.includes('ticketland.ru')) return 'ticketland';
@@ -2258,6 +2260,7 @@ function ticketBtnHTML(tickets, price, vendor){
   if(v==='mts') return `<a class="detail-ticket detail-ticket--mts" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/mts.webp" alt="МТС Live"><span>Есть билеты на МТС Live</span></a>`;
   if(v==='ticketland') return `<a class="detail-ticket detail-ticket--ticketland" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/ticketland.svg" alt="Ticketland"><span>Есть билеты на Ticketland</span></a>`;
   if(v==='afisha') return `<a class="detail-ticket detail-ticket--afisha" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/afisha.svg" alt="Афиша"><span>Есть билеты на Афише</span></a>`;
+  if(v==='kassir') return `<a class="detail-ticket detail-ticket--kassir" href="${esc(tickets)}" target="_blank" rel="noopener"><img src="./assets/img/kassir.svg" alt="KASSIR.RU"><span>Есть билеты на KASSIR.RU</span></a>`;
   return `<a class="detail-ticket" href="${esc(tickets)}" target="_blank" rel="noopener"><i class="fas fa-ticket"></i><span>Купить билет${esc(priceSuffix)}</span></a>`;
 }
 // Хук для карты (events-map.js): «свайп вверх» на пине догружает описание
@@ -2373,7 +2376,7 @@ function renderDetail(c, isFull){
   const bands = (c.bands||[]).filter(b=>b && b.name);
   const bandsHTML = bands.length ? `<div class="detail__performers"><h3>Исполнители</h3><div class="detail__performers-row">${bands.map(b=>{
     const av = b.avatar ? `<img src="${esc(b.avatar)}" alt="${esc(b.name)}" loading="lazy">` : `<span class="detail__performer-ph"><i class="fas fa-music"></i></span>`;
-    const href = b.slug ? esc(siteUrl('/menu/bands/'+b.slug+'/')) : '#';
+    const href = b.slug ? esc(siteUrl('/artists/'+b.slug+'/')) : '#';
     return `<a class="detail__performer" ${b.bg_color? `style="background-color:${esc(b.bg_color)}"`:''} href="${href}" target="_blank" rel="noopener"><span class="detail__performer-av">${av}</span><span class="detail__performer-info"><span class="detail__performer-name">${esc(b.name)}</span>${b.music_style? `<span class="detail__performer-style">${esc(b.music_style)}</span>`:''}</span></a>`;
   }).join('')}</div></div>` : '';
   const similar = (c.similar||[]).filter(s=>s.slug!==c.slug && (!s.date || s.date>=state.todayISO)).slice(0,10);
@@ -2387,13 +2390,13 @@ function renderDetail(c, isFull){
         ${tickets? ticketBtnHTML(tickets, c.price, c.ticket_vendor):''}
       </div>
     </div>
+    ${yandexPromosHTML(c)}
     ${bandsHTML}
     <div class="detail__actions">
       ${routeHref? `<a class="pl-btn detail-route--yandex" href="${routeHref}" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Маршрут</a>`:''}
       <button class="pl-btn pl-btn--secondary" id="detail-map-btn"><i class="fas fa-map"></i> На карте</button>
     </div>
     ${c.description? `<div class="detail__desc">${linkify(c.description)}</div>` : (isFull? '' : `<div class="detail__desc" style="color:#999">Загрузка описания…</div>`)}
-    ${yandexPromosHTML(c)}
     ${pushkinHTML(c)}
     ${srcLink? `<div class="detail__site-link"><a href="${esc(srcLink)}" target="_blank" rel="noopener">Источник</a> · <a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`
       : `<div class="detail__site-link"><a href="${esc(siteEventUrl(c.slug))}" target="_blank" rel="noopener">Открыть на permlive.ru</a></div>`}

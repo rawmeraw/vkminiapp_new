@@ -942,6 +942,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var TICKET_BRAND_META = {
         yandex: { cls: 'yandex', logo: 'yandex_afisha.svg', alt: 'Яндекс.Афиша' },
         afisha: { cls: 'afisha', logo: 'afisha.svg', alt: 'Афиша' },
+        kassir: { cls: 'kassir', logo: 'kassir.svg', alt: 'KASSIR.RU' },
         ticketland: { cls: 'ticketland', logo: 'ticketland.svg', alt: 'Ticketland' },
         mts: { cls: 'mts', logo: 'mts.webp', alt: 'MTS Live' }
     };
@@ -970,6 +971,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             if (dm) target = decodeURIComponent(dm[1]).split('?')[0].split('#')[0];
         } catch (e) {}
         if (target.indexOf('afisha.ru') !== -1 || target.indexOf('yyczo.com') !== -1) return 'afisha';
+        // KASSIR (vxrlm/kassir.ru) — до yandex-эвристики: erid=25H8... с цифры.
+        if (u.indexOf('vxrlm.com') !== -1 || u.indexOf('kassir.ru') !== -1) return 'kassir';
         var erid = /erid=([^&\s]+)/.exec(u);
         if (target.indexOf('afisha.yandex.ru') !== -1 || (erid && /^\d/.test(erid[1]))) return 'yandex';
         if (target.indexOf('ticketland.ru') !== -1) return 'ticketland';
