@@ -1035,7 +1035,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var label = event.price === 0 ? 'Бесплатно'
             : 'Купить билеты' + (event.price > 0 ? ' от ' + event.price + ' ₽' : '');
         var inner = meta
-            ? '<img src="' + TICKET_LOGO_BASE + meta.logo + '" alt="' + meta.alt + '" loading="lazy" decoding="async">'
+            ? (meta.emoji
+                ? '<span class="kassir-emoji" aria-hidden="true">' + meta.emoji + '</span>'
+                : '<img src="' + TICKET_LOGO_BASE + meta.logo + '" alt="' + meta.alt + '" loading="lazy" decoding="async">')
             : '<i class="fas fa-ticket" aria-hidden="true"></i>';
         return '<a class="pl-map-balloon__ticket' + (meta ? ' pl-map-balloon__ticket--' + meta.cls : '') +
             '" href="' + escapeAttr(url) + '" target="_blank" rel="noopener">' + inner +

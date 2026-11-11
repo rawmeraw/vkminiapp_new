@@ -429,9 +429,9 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .detail-ticket--ticketland:hover{color:#fff}
 .detail-ticket--afisha{background:#B0154F;color:#fff;box-shadow:0 4px 15px rgba(176,21,79,.4)}
 .detail-ticket--afisha:hover{background:#8F0E3C;color:#fff}
-.detail-ticket--kassir{background:linear-gradient(135deg,#FF7B1D,#FF9A3D);color:#222;box-shadow:0 4px 15px rgba(255,123,29,.4)}
-.detail-ticket--kassir img{width:auto;height:18px;max-width:70px}
-.detail-ticket--kassir:hover{color:#222}
+.detail-ticket--kassir{background:linear-gradient(135deg,#141920,#2b3245);color:#fff;box-shadow:0 4px 15px rgba(20,25,32,.45),0 0 12px rgba(255,197,0,.15)}
+.detail-ticket--kassir img{width:20px;height:20px;border-radius:50%}
+.detail-ticket--kassir:hover{color:#fff}
 .detail-route--yandex{background:#fc0 !important;color:#000 !important;border-color:#fc0 !important}
 .detail__performers{margin-top:14px}
 .detail__performers h3{font-size:15px;margin:0 0 8px}
