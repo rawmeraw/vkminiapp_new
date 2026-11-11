@@ -374,6 +374,51 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return w ? [sumLng / w, sumLat / w] : cityFallbackCenter();
     }
 
+    /* Пул точек для камеры: фильтр текущего дня, иначе вообще все события */
+    function eventPool() {
+        var list = filteredEvents();
+        return list.length ? list : state.events;
+    }
+
+    /* Крупнейший зум, при котором все точки пула остаются на экране:
+       город с точками за 100–120 км (Уссурийск/Находка/Владивосток) больше
+       не открывается «пустой» на z14. Если даже на z4 не всё влезло —
+       берём зум с максимумом видимых точек. Тяга к оплаченным сохраняется:
+       центр и так взвешен по paid (weightedCenter). */
+    function defaultZoomFor(list, center) {
+        return Math.max(4, Math.min(19, fitZoomFor(list, center)));
+    }
+
+    function fitZoomFor(list, center) {
+        var pts = [];
+        for (var i = 0; i < list.length; i++) {
+            var c = list[i].coordinates;
+            if (c && isFinite(c[0]) && isFinite(c[1])) pts.push(c);
+        }
+        if (!pts.length) return 14;
+        var el = state.mapEl || document.getElementById('map');
+        var viewW = (el && el.clientWidth) || 360;
+        var viewH = (el && el.clientHeight) || 640;
+        if (viewW < 200) viewW = 360;
+        if (viewH < 200) viewH = 640;
+        var cosLat = Math.cos(center[1] * Math.PI / 180) || 1;
+        var bestZ = 4, bestCount = -1;
+        for (var z = 17; z >= 4; z--) {
+            var kmPerPx = (360 / (256 * Math.pow(2, z))) * 111.32;
+            var halfWkm = (viewW / 2) * kmPerPx * cosLat;
+            var halfHkm = (viewH / 2) * kmPerPx;
+            var count = 0;
+            for (var j = 0; j < pts.length; j++) {
+                var dx = (pts[j][0] - center[0]) * 111.32 * cosLat;
+                var dy = (pts[j][1] - center[1]) * 111.32;
+                if (Math.abs(dx) <= halfWkm && Math.abs(dy) <= halfHkm) count++;
+            }
+            if (count >= pts.length) return z;
+            if (count > bestCount) { bestCount = count; bestZ = z; }
+        }
+        return bestZ;
+    }
+
     function pinScale(rating) {
         var r = Math.min(5, Math.max(3, Number(rating) || 3));
         var t = (r - 3) / 2;
@@ -586,9 +631,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     function recenterForDay() {
         if (!state.map) return;
+        var center = averageCoords();
         state.map.setLocation({
-            center: averageCoords(),
-            zoom: 14,
+            center: center,
+            zoom: defaultZoomFor(eventPool(), center),
             duration: 300,
             easing: 'ease-in-out'
         });
@@ -2316,8 +2362,9 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         state.proposeEl = null;
         state.proposeOverlayEl = null;
 
+        var initCenter = averageCoords();
         var map = new ymaps3.YMap(state.mapEl, {
-            location: { center: averageCoords(), zoom: 14 },
+            location: { center: initCenter, zoom: defaultZoomFor(eventPool(), initCenter) },
 
             mode: 'raster',
             theme: 'light',
