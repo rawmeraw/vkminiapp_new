@@ -23,8 +23,8 @@
   <!-- Yandex Maps JS API v3 — ключ только для vkminiapp_new -->
   <script>window.PermLiveMapSettings={apiKey:'30ae02d3-cd24-4741-849d-947b8c46c1a9'};window.PermLiveMapData={events:[],today:'',defaultDate:'',csrf:'',mapUser:{is_auth:false}};</script>
 
-  <link rel="stylesheet" href="./assets/css/style.css?v=20261111a">
-  <link rel="stylesheet" href="./assets/css/maps.css?v=20261111a">
+  <link rel="stylesheet" href="./assets/css/style.css?v=20261205a">
+  <link rel="stylesheet" href="./assets/css/maps.css?v=20261205a">
 </head>
 <body>
   <!-- Header как на сайте: заголовок + дропдаун городов + дропдаун разделов -->
@@ -54,10 +54,19 @@
           <a class="sections-dropdown-item" role="menuitem" href="#" data-section="timeline"><i class="fa-solid fa-list-ul"></i><span>Таймлайн</span><i class="fa-solid fa-check" style="display:none"></i></a>
         </div>
       </div>
-      <button type="button" class="propose-btn" id="propose-btn" aria-label="Предложить событие">
-        <i class="fa-solid fa-plus"></i>
-        <span>Предложить событие</span>
-      </button>
+      <div class="sections-dropdown afisha-dropdown" id="afisha-dropdown">
+        <button type="button" class="sections-dropdown-btn" id="afisha-dropdown-btn" aria-haspopup="true" aria-expanded="false" aria-label="Тип афиши">
+          <i id="afisha-dropdown-icon" class="fas fa-layer-group"></i>
+          <span id="afisha-dropdown-label">Все события</span>
+          <i class="fa-solid fa-chevron-down sections-dropdown-chevron"></i>
+        </button>
+        <div class="sections-dropdown-menu" id="afisha-dropdown-menu" role="menu">
+          <button type="button" class="sections-dropdown-item afisha-opt active" data-vert="all" role="menuitem"><i class="fas fa-layer-group"></i><span>Все события</span><i class="fa-solid fa-check afisha-check"></i></button>
+          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="music" role="menuitem"><i class="fas fa-music"></i><span>Концерты</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
+          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="show" role="menuitem"><i class="fas fa-theater-masks"></i><span>Театры</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
+          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="cinema" role="menuitem"><i class="fas fa-film"></i><span>Кино</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -233,16 +242,21 @@
     <button class="pl-tabbar__btn" id="tabbar-timeline" role="tab" aria-selected="false" aria-label="Таймлайн">
       <i class="fa-solid fa-list-ul"></i><span>Таймлайн</span>
     </button>
-    <button class="pl-tabbar__btn" data-tab="add" role="tab" aria-selected="false">
-      <i class="fa-solid fa-plus"></i><span>Предложить</span>
-    </button>
   </nav>
+
+  <!-- Переключатель типа афиши — мобильный футер (десктоп — дропдаун в хедере) -->
+  <div class="vert-bar" id="vert-bar" role="group" aria-label="Тип афиши">
+    <button type="button" class="vert-pill is-active" data-vert="all" style="--vp:#64748b"><i class="fas fa-layer-group"></i><span>Все</span></button>
+    <button type="button" class="vert-pill" data-vert="music" style="--vp:#e14425"><i class="fas fa-music"></i><span>Концерты</span></button>
+    <button type="button" class="vert-pill" data-vert="show" style="--vp:#5f4a33"><i class="fas fa-theater-masks"></i><span>Театры</span></button>
+    <button type="button" class="vert-pill" data-vert="cinema" style="--vp:#1d4076"><i class="fas fa-film"></i><span>Кино</span></button>
+  </div>
 
   <!-- Toast -->
   <div id="toast" class="pl-toast"></div>
 
   <script src="./assets/js/maps/map-core.js?v=20260910" defer></script>
-  <script src="./assets/js/maps/events-map.js?v=20261111" defer></script>
-  <script type="module" src="./assets/js/app.js?v=20261111b"></script>
+  <script src="./assets/js/maps/events-map.js?v=20261205" defer></script>
+  <script type="module" src="./assets/js/app.js?v=20261205a"></script>
 </body>
 </html>

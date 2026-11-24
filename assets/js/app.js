@@ -375,6 +375,7 @@ const state = {
   map: null,
   mapMarkers: [],
   mapMode: 'all',
+  mapVertical: 'all',
   todayISO: ekbTodayISO(),
   timelineMode: null,
   detailSlug: null,
@@ -682,10 +683,8 @@ function renderCityDropdown(){
   const rest = active ? list.filter(c => c.slug!==state.city) : list;
   const groups = groupCities(rest);
   const item = function(c, isActive){
-    const count = (typeof c.event_count==='number' && c.event_count>0)
-      ? `<span class="city-count-badge">${c.event_count}</span>` : '';
     return `<a class="city-dropdown-item${isActive?' active':''}" role="menuitem" data-city-slug="${esc(c.slug)}">`+
-      `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>${count}`+
+      `<i class="fa-solid fa-city"></i><span>${esc(c.name)}</span>`+
       (isActive ? `<i class="fa-solid fa-check"></i>` : '') + `</a>`;
   };
   menu.innerHTML = (active ? item(active, true) : '') + groups.map(g =>
@@ -844,6 +843,7 @@ async function switchCity(slug, opts){
   state.query='';
   if(els.searchInput){ els.searchInput.value=''; const sc=$('#search-clear'); if(sc) sc.style.display='none'; }
   state.concerts=[];
+  state.allConcerts=[];
   state.top10Pool=[];
   state.upcomingPool=[];
   state.forYouPool=[];
@@ -923,19 +923,16 @@ function renderCitiesPage(){
   if(!groupsEl) return;
   const list = citiesList();
   const groups = groupCities(list);
-  const totalEvents = list.reduce((s, c) => s + (Number(c.event_count) || 0), 0);
-  if(subEl) subEl.innerHTML = `Афиша ${totalEvents} ${plural(totalEvents, 'концерт', 'концерта', 'концертов')} в ${list.length} ${plural(list.length, 'городе', 'городах', 'городах')} России`;
+  if(subEl) subEl.innerHTML = `Афиша концертов в ${list.length} ${plural(list.length, 'городе', 'городах', 'городах')} России`;
   groupsEl.innerHTML = groups.map(g => `
     <section class="cities-group" data-group="${esc(g.title)}">
       <h2 class="cities-group-title">${esc(g.title)}</h2>
       <div class="cities-grid">
         ${g.cities.map(c => {
-          const n = Number(c.event_count) || 0;
           const active = c.slug === state.city;
           return `<button type="button" class="city-card${active ? ' active' : ''}" data-city-slug="${esc(c.slug)}" data-city-name="${esc(String(c.name || '').toLowerCase())}">
             <i class="fa-solid fa-city city-card-ico"></i>
             <span class="city-card-name">${esc(c.name)}</span>
-            <span class="city-count-badge${n ? '' : ' is-zero'}">${n}</span>
             ${active ? `<i class="fa-solid fa-check"></i>` : ''}
           </button>`;
         }).join('')}
@@ -1075,7 +1072,7 @@ function ensureCitiesMap(){
   if(!mapEl || !els.viewCities || !els.viewCities.classList.contains('view--active')) return;
   const pts = citiesList().map(c => {
     const p = cityCoords(c);
-    return p ? {slug: c.slug, name: c.name, count: Number(c.event_count) || 0, lat: p.lat, lon: p.lon} : null;
+    return p ? {slug: c.slug, name: c.name, lat: p.lat, lon: p.lon} : null;
   }).filter(Boolean);
   if(!pts.length){
     const sec = document.getElementById('cities-map-section');
@@ -1085,7 +1082,7 @@ function ensureCitiesMap(){
   // Подпись набора: сначала рисуем фолбэк (30), затем приходит API (75).
   // Если города/координаты изменились — перестраиваем карту, иначе новые
   // города остались бы без пинов.
-  const mapSig = pts.map(p => p.slug+'@'+p.lat+','+p.lon+'#'+p.count).join('|');
+  const mapSig = pts.map(p => p.slug+'@'+p.lat+','+p.lon).join('|');
   if(citiesMap){
     if(citiesMap._plSig === mapSig){ refreshCitiesPins(); return; }
     citiesMap = null;
@@ -1124,14 +1121,14 @@ function ensureCitiesMap(){
     pts.forEach(function(p){
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'cities-map-pin' + (p.count === 0 ? ' is-zero' : '') + (p.slug === state.city ? ' active' : '');
+      btn.className = 'cities-map-pin' + (p.slug === state.city ? ' active' : '');
       btn.setAttribute('data-city-slug', p.slug);
-      btn.title = `${p.name} — ${p.count} ${plural(p.count, 'событие', 'события', 'событий')}`;
+      btn.title = p.name;
       const dot = document.createElement('span');
       dot.className = 'cities-map-pin__dot';
       const label = document.createElement('span');
       label.className = 'cities-map-pin__label';
-      label.textContent = `${p.name} (${p.count})`;
+      label.textContent = p.name;
       btn.appendChild(dot);
       btn.appendChild(label);
       btn.addEventListener('click', function(){
@@ -1188,7 +1185,7 @@ async function fillFullPool(seen){
     const results = fullRes && Array.isArray(fullRes.results) ? fullRes.results : (Array.isArray(fullRes) ? fullRes : []);
     let added=false;
     for(const c of results.map(normalizeApiConcert).filter(c => c.slug && c.date && c.id && c.title)){
-      if(!seen.has(c.slug)){ seen.add(c.slug); state.concerts.push(c); added=true; }
+      if(!seen.has(c.slug)){ seen.add(c.slug); state.allConcerts.push(c); if(vertPass(c)) state.concerts.push(c); added=true; }
     }
     if(added || !state.fullLoaded) rebuildPools();
     state.fullLoaded=true;
@@ -1236,7 +1233,8 @@ async function loadData(){
       }
     }
   }
-  state.concerts = pool;
+  state.allConcerts = pool.slice();
+  state.concerts = pool.filter(vertPass);
   rebuildPools();
   // Первый paint сразу — не ждём полный пул (500), VK bridge и рекомендации
   try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('early paint failed', e); }
@@ -1334,7 +1332,7 @@ async function loadData(){
         const list=rec.results.map(normalizeApiConcert).filter(c=>c.slug);
         // добавляем рекомендации в общий пул, чтобы карточки/карта их видели
         for (const c of list) {
-          if (!seen.has(c.slug)) { seen.add(c.slug); state.concerts.push(c); }
+          if (!seen.has(c.slug)) { seen.add(c.slug); state.allConcerts.push(c); if(vertPass(c)) state.concerts.push(c); }
         }
         state.forYouPool=list;
         state.hasForYou=true;
@@ -2184,7 +2182,7 @@ async function fetchDetail(slug){
     // обновить и общий пул, чтобы карточки знали описание
     const i = state.concerts.findIndex(x=>x.slug===slug);
     if(i>=0) state.concerts[i]={...state.concerts[i], ...c};
-    else state.concerts.push(c);
+    else { state.allConcerts.push(c); if(vertPass(c)) state.concerts.push(c); }
     return c;
   }
   return null;
@@ -2246,6 +2244,9 @@ function ticketVendor(url){
   if(u.includes('afisha.ru') || u.includes('yyczo.com')) return 'afisha';
   // KASSIR (vxrlm/kassir.ru) — до yandex-эвристики: erid=25H8... с цифры.
   if(u.includes('vxrlm.com') || u.includes('kassir.ru')) return 'kassir';
+  // ficca2021.com — Admitad-оффер Ticketland/MTS; erid=5jtCe... с цифры,
+  // до yandex-правила.
+  if(u.includes('ficca2021.com')) return 'ticketland';
   if(u.includes('afisha.yandex.ru') || (m && /^\d/.test(m[1]))) return 'yandex';
   if(u.includes('cake.permlive.ru/go')) return 'mts';
   if(u.includes('ticketland.ru')) return 'ticketland';
@@ -2275,7 +2276,9 @@ window.PermLiveMapDetailLoader = function(event, done){
         description: c.description||'',
         description_html: c.description_html||'',
         tickets: c.tickets||'',
-        ticket_brand: c.ticket_vendor||''
+        ticket_brand: c.ticket_vendor||'',
+        yandex_promocodes: c.yandex_promocodes||[],
+        yandex_promo_ad_marking: c.yandex_promo_ad_marking||''
       });
     })
     .catch(function(){ done(null); });
@@ -2291,14 +2294,14 @@ function yandexPromosHTML(c){
       + `<span class="vk-promo-cond">${esc(cond)}</span></div>`
       + `<div class="vk-promo-actions">`
       + `<button type="button" class="vk-promo-code" data-code="${esc(p.code||'')}" onclick="copyVkPromo(this)">`
-      + `<span class="vk-promo-code-text">${esc(p.code||'')}</span> <i class="fa-solid fa-copy"></i></button> `
-      + `<a class="vk-promo-link" href="${esc(p.referral_link||'')}" target="_blank" rel="noopener">Перейти к покупке</a>`
-      + `</div></div>`
-      + (p.ad_marking ? `<p class="vk-promo-ad">${esc(p.ad_marking)}</p>` : '');
+      + `<span class="vk-promo-code-text">${esc(p.code||'')}</span> <i class="fa-solid fa-copy"></i></button>`
+      + `</div>`
+      + (p.ad_marking ? `<p class="vk-promo-ad">${esc(p.ad_marking)}</p>` : '')
+      + `</div>`;
   }).join('');
   const hasMarking = promos.some(p=>p.ad_marking);
   return `<div class="vk-promo-box"><h3>Скидки на билеты</h3>`
-    + `<p class="vk-promo-sub">Вводить промокод нужно в мобильном приложении Яндекс.Афиша.<br>Минимальная сумма заказа со скидкой: 2000 ₽</p>`
+    + `<p class="vk-promo-sub">Вводить промокод нужно в мобильном приложении Яндекс.Афиша.</p>`
     + items
     + (!hasMarking && c.yandex_promo_ad_marking ? `<p class="vk-promo-ad">${esc(c.yandex_promo_ad_marking)}</p>` : '')
     + `</div>`;
@@ -2698,8 +2701,95 @@ function updateMapFiltersBlack(){
   if(mBtn) mBtn.classList.toggle('pl-map-mode-btn--filtered', isModeFiltered);
   updateForyouOption();
 }
+
+// Вертикаль афиши на карте мини-аппа (пилюли Все/Концерты/Театры/Кино).
+// Повторяет concert_vertical с бэка: cinema > show > music; в music
+// culture-миксы остаются (как filter_concerts_vertical).
+function appEventVertical(c){
+  const types={};
+  (c.tags||[]).forEach(t=>{ types[String(t.type||'').toLowerCase()]=1; });
+  if(types.cinema) return 'cinema';
+  if(types.theater||types.standup) return 'show';
+  if(types.culture && !(types.extreme||types.hard||types.academic||types.pop)) return 'show';
+  return 'music';
+}
+const MAP_VERT_KEY='pl2_map_vertical';
+function vertPass(c){
+  const v = state.mapVertical || 'all';
+  if(v==='all') return true;
+  return appEventVertical(c)===v;
+}
+function setAppVertical(v){
+  if(!['all','music','show','cinema'].includes(v)) v='all';
+  if(state.mapVertical===v) return;
+  state.mapVertical=v;
+  try{ localStorage.setItem(MAP_VERT_KEY,v); }catch(e){}
+  state.concerts=(state.allConcerts&&state.allConcerts.length?state.allConcerts:state.concerts).filter(vertPass);
+  rebuildPools();
+  try{ renderCalendarStrip(); }catch(e){}
+  try{ applyFilter(); }catch(e){}
+  try{ if(state.tab==='map') refreshMapMarkers(); }catch(e){}
+  syncAfishaUI();
+}
+const VERT_META={
+  all:{label:'Все события',icon:'fa-layer-group'},
+  music:{label:'Концерты',icon:'fa-music'},
+  show:{label:'Театры',icon:'fa-theater-masks'},
+  cinema:{label:'Кино',icon:'fa-film'}
+};
+function syncAfishaUI(){
+  const v=state.mapVertical||'all';
+  const meta=VERT_META[v]||VERT_META.all;
+  const lb=document.getElementById('afisha-dropdown-label'); if(lb) lb.textContent=meta.label;
+  const ic=document.getElementById('afisha-dropdown-icon'); if(ic) ic.className='fas '+meta.icon;
+  document.querySelectorAll('.afisha-opt').forEach(el=>{
+    const on=el.dataset.vert===v;
+    const chk=el.querySelector('.afisha-check'); if(chk) chk.style.display=on?'':'none';
+    el.classList.toggle('active',on);
+  });
+  document.querySelectorAll('.vert-pill').forEach(el=>el.classList.toggle('is-active',el.dataset.vert===v));
+}
+function initAfishaControls(){
+  if(window._afishaWired) { syncAfishaUI(); return; }
+  window._afishaWired=true;
+  try{ state.mapVertical=localStorage.getItem(MAP_VERT_KEY)||'all'; }catch(e){ state.mapVertical='all'; }
+  if(!['all','music','show','cinema'].includes(state.mapVertical)) state.mapVertical='all';
+  const dd=document.getElementById('afisha-dropdown');
+  const db=document.getElementById('afisha-dropdown-btn');
+  if(dd&&db){
+    db.addEventListener('click',function(e){
+      e.stopPropagation();
+      const open=dd.classList.toggle('open');
+      db.setAttribute('aria-expanded',open?'true':'false');
+      document.querySelectorAll('.sections-dropdown.open').forEach(x=>{ if(x!==dd) x.classList.remove('open'); });
+    });
+    dd.querySelectorAll('.afisha-opt').forEach(b=>{
+      b.addEventListener('click',function(){
+        setAppVertical(b.dataset.vert);
+        dd.classList.remove('open'); db.setAttribute('aria-expanded','false');
+      });
+    });
+  }
+  document.querySelectorAll('.vert-pill').forEach(b=>{
+    b.addEventListener('click',function(){ setAppVertical(b.dataset.vert); });
+  });
+  document.addEventListener('click',function(e){
+    if(dd&&!dd.contains(e.target)){ dd.classList.remove('open'); if(db) db.setAttribute('aria-expanded','false'); }
+  });
+  // Восстановленная вертикаль из localStorage: применяем фильтр к уже
+  // загруженному пулу (push'и дальше проходят через vertPass сами).
+  if(state.mapVertical!=='all'){
+    if(!(state.allConcerts&&state.allConcerts.length)&&state.concerts.length)
+      state.allConcerts=state.concerts.slice();
+    state.concerts=state.allConcerts.filter(vertPass);
+    try{ rebuildPools(); applyFilter(); }catch(e){}
+  }
+  syncAfishaUI();
+}
+
 function refreshMapMarkers(){
   updateMapFiltersBlack();
+  initAfishaControls();
   // Yandex - site logic via PermLiveMaps.setEvents (как на /map/ - без мока Leaflet)
   let listY=[];
   if(state.range) listY=state.concerts.filter(c=> c.date>=state.range.start && c.date<=state.range.end);
@@ -2711,6 +2801,8 @@ function refreshMapMarkers(){
     const fy = new Set(state.forYouPool.map(c=>c.slug));
     listY=listY.filter(c=> fy.has(c.slug));
   }
+  const mv = state.mapVertical || 'all';
+  if(mv!=='all') listY=listY.filter(c=> appEventVertical(c)===mv);
   if(window.PermLiveMaps && typeof window.PermLiveMaps.setEvents==='function'){
     try{
       const evts=listY.map(c=>{
@@ -2753,12 +2845,14 @@ function refreshMapMarkers(){
 async function loadMapForDate(iso){
   const j=await fetchJSON(`${API_BASE}/map/events/?${cityQuery()}&date=${iso}`);
   if(j && Array.isArray(j.events)){
-    const other=state.concerts.filter(c=>c.date!==iso);
+    const _baseAll = (state.allConcerts&&state.allConcerts.length)?state.allConcerts:state.concerts;
+    const other=_baseAll.filter(c=>c.date!==iso);
     const incoming=j.events.map(normalizeApiEvent).filter(c=>c.slug);
     // dedup
-    const seen=new Set(state.concerts.map(c=>c.slug));
+    const seen=new Set(_baseAll.map(c=>c.slug));
     const add = incoming.filter(c=>!seen.has(c.slug));
-    state.concerts = [...state.concerts, ...add].sort((a,b)=> a.date.localeCompare(b.date));
+    state.allConcerts = [...other, ...add].sort((a,b)=> a.date.localeCompare(b.date));
+    state.concerts = state.allConcerts.filter(vertPass);
     state.datesWithEvents.add(iso);
     applyFilter();
     refreshMapMarkers();

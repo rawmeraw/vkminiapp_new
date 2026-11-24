@@ -49,6 +49,10 @@
         'hard': '#f05a15',
         'academic': '#7cb342',
         'pop': '#06b6d4',
+        'cinema': '#1d4076',
+        'theater': '#9d174d',
+        'standup': '#eab308',
+        'culture': '#8b5cf6',
         'other': '#94a3b8'
     };
 
@@ -58,6 +62,10 @@
         'hard': 'Рок и акустика',
         'academic': 'Классика и джаз',
         'pop': 'Поп и электроника',
+        'cinema': 'Кино',
+        'theater': 'Театр',
+        'standup': 'Стендап',
+        'culture': 'Культура',
         'other': 'Прочее'
     };
 
@@ -67,7 +75,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     var pressedXY = null;
 
     var FILTER_KEY = 'pl_map_filters_v3';
-    var FILTER_TYPES = ['extreme', 'hard', 'academic', 'pop', 'other'];
+    var FILTER_TYPES = ['extreme', 'hard', 'academic', 'pop', 'cinema', 'theater', 'standup', 'culture', 'other'];
     var MODE_KEY = 'pl_map_mode_v1';
 
     var state = {
@@ -87,7 +95,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         clusterer: null,
         toastTimer: null,
         events: (window.PermLiveMapData && window.PermLiveMapData.events) || [],
-        filters: { extreme: true, hard: true, academic: true, pop: true, other: true },
+        filters: { extreme: true, hard: true, academic: true, pop: true, cinema: true, theater: true, standup: true, culture: true, other: true },
         modeFilter: 'all',
         filterBtns: {},
         flowerEl: null,
@@ -111,7 +119,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         // Приоритет типа: extreme > hard > academic > pop > other.
         // Сканируем все теги — extreme перекрывает остальные, «other»
         // не должен перекрывать цветной тип.
-        var rank = { extreme: 4, hard: 3, academic: 2, pop: 1, other: 0 };
+        var rank = { extreme: 4, hard: 3, academic: 2, pop: 1, cinema: 1, theater: 1, standup: 1, culture: 1, other: 0 };
         var tags = (event && event.tags) || [];
         var best = '';
         var bestRank = -1;
@@ -217,7 +225,8 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     }
 
     function getTypeAvailability() {
-        var cnt = { extreme: 0, hard: 0, academic: 0, pop: 0, other: 0 };
+        var cnt = {};
+        for (var ki = 0; ki < FILTER_TYPES.length; ki++) cnt[FILTER_TYPES[ki]] = 0;
         for (var i = 0; i < state.events.length; i++) {
             var t = primaryType(state.events[i]);
             if (cnt.hasOwnProperty(t)) cnt[t]++;
@@ -323,6 +332,15 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
     var OUTLIER_KM = 10;
 
+    // Радиус «своего» города вокруг точки входа и сила тяготения к ней.
+    // События другого города на центр не влияют (точки всё равно видны).
+    var HOME_RADIUS_KM = 80;
+    var HOME_PULL = 0.35;
+    // «Городской» кадр для дефолтного зума: круг этого радиуса вокруг
+    // центра города. Дефолтный зум не ближе — один концерт на улице
+    // не должен открывать карту на конкретном доме.
+    var HOME_VIEW_RADIUS_KM = 20;
+
     function miniCitySlug() {
         try {
             var d = window.PermLiveMapData || {};
@@ -345,6 +363,25 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return DEFAULT_CENTER;
     }
 
+    function blendCenter(avg, base, pull) {
+        return [avg[0] + (base[0] - avg[0]) * pull, avg[1] + (base[1] - avg[1]) * pull];
+    }
+
+    // События «своего» города: в HOME_RADIUS_KM от центра выбранного
+    // города мини-аппа. Сателлиты и другие города в камеру не попадают
+    // (пины видны все).
+    function homeEvents(list, base) {
+        base = base || cityFallbackCenter();
+        var home = [];
+        for (var i = 0; i < list.length; i++) {
+            var ev = list[i];
+            if (ev.coordinates && coordsDistanceM(ev.coordinates, base) <= HOME_RADIUS_KM * 1000) {
+                home.push(ev);
+            }
+        }
+        return home;
+    }
+
     function averageCoords() {
         var list = filteredEvents();
         if (!list.length) {
@@ -352,14 +389,18 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
             list = state.events;
             if (!list.length) return cityFallbackCenter();
         }
-        var center = weightedCenter(list);
+        var base = cityFallbackCenter();
+        var home = homeEvents(list, base);
+        if (!home.length) return base;
+        var center = weightedCenter(home);
         var close = [];
-        for (var i = 0; i < list.length; i++) {
-            if (coordsDistanceM(list[i].coordinates, center) <= OUTLIER_KM * 1000) {
-                close.push(list[i]);
+        for (var i = 0; i < home.length; i++) {
+            if (coordsDistanceM(home[i].coordinates, center) <= OUTLIER_KM * 1000) {
+                close.push(home[i]);
             }
         }
-        return close.length ? weightedCenter(close) : center;
+        var avg = close.length ? weightedCenter(close) : center;
+        return blendCenter(avg, base, HOME_PULL);
     }
 
     function weightedCenter(list) {
@@ -380,13 +421,34 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return list.length ? list : state.events;
     }
 
-    /* Крупнейший зум, при котором все точки пула остаются на экране:
-       город с точками за 100–120 км (Уссурийск/Находка/Владивосток) больше
-       не открывается «пустой» на z14. Если даже на z4 не всё влезло —
-       берём зум с максимумом видимых точек. Тяга к оплаченным сохраняется:
+    /* Для камеры — только «свои» события у выбранного города:
+       сателлиты не должны ни центр тянуть, ни зум раздувать. */
+    function cameraPool() {
+        var home = homeEvents(eventPool());
+        return home.length ? home : [];
+    }
+
+    /* Зум «город целиком»: круг ±HOME_VIEW_RADIUS_KM вокруг центра города. */
+    function cityViewZoom(center) {
+        var dLat = HOME_VIEW_RADIUS_KM / 111.32;
+        var cosLat = Math.cos(center[1] * Math.PI / 180) || 1;
+        var dLng = HOME_VIEW_RADIUS_KM / (111.32 * cosLat);
+        var box = [];
+        for (var i = 0; i < 8; i++) {
+            var ang = i * Math.PI / 4;
+            box.push({ coordinates: [center[0] + Math.cos(ang) * dLng, center[1] + Math.sin(ang) * dLat] });
+        }
+        return fitZoomFor(box, center);
+    }
+
+    /* Дефолтный зум: не дальше «городского» кадра (иначе один концерт
+       на улице открывал конкретный дом) и не ближе, чем нужно, чтобы
+       вместить все «свои» точки дня. Тяга к оплаченным сохраняется:
        центр и так взвешен по paid (weightedCenter). */
     function defaultZoomFor(list, center) {
-        return Math.max(4, Math.min(19, fitZoomFor(list, center)));
+        var viewFit = cityViewZoom(center);
+        if (!list || !list.length) return Math.max(4, Math.min(19, viewFit));
+        return Math.max(4, Math.min(19, Math.min(fitZoomFor(list, center), viewFit)));
     }
 
     function fitZoomFor(list, center) {
@@ -634,7 +696,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var center = averageCoords();
         state.map.setLocation({
             center: center,
-            zoom: defaultZoomFor(eventPool(), center),
+            zoom: defaultZoomFor(cameraPool(), center),
             duration: 300,
             easing: 'ease-in-out'
         });
@@ -1027,10 +1089,83 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         return '';
     }
 
+    function eventTicketBrand(event) {
+        var url = event.tickets;
+        return normalizeTicketBrand(event.ticket_brand || event.ticket_vendor) || guessTicketBrand(url);
+    }
+
+    // Промокоды Яндекс Афиши: по яндекс-ссылкам платят только за заказы
+    // с промокодом, поэтому под списком кодов показываем обычную кнопку
+    // покупки (она ведёт на страницу концерта через dl= рефералку).
+    // Зеркало homepage/blocks/yandex_promocodes.html.
+    function buildYandexPromosHtml(event) {
+        var promos = event.yandex_promocodes;
+        if (!promos || !promos.length) return '';
+        var hasMarking = false;
+        var items = '';
+        for (var i = 0; i < promos.length; i++) {
+            var p = promos[i] || {};
+            if (p.ad_marking) hasMarking = true;
+            var cond = 'при заказе от ' + (p.min_price || 0) + ' ₽' +
+                (p.new_only ? ' · только для новых пользователей' : ' · для всех пользователей');
+            items += '<div class="yandex-promo-item">' +
+                '<div class="yandex-promo-info"><span class="yandex-promo-discount">' +
+                escapeHtml(p.discount_text || '') + '</span> ' +
+                '<span class="yandex-promo-cond">' + escapeHtml(cond) + '</span></div>' +
+                '<div class="yandex-promo-actions">' +
+                '<button type="button" class="yandex-promo-code" data-code="' +
+                escapeAttr(p.code || '') + '"><span class="yandex-promo-code-text">' +
+                escapeHtml(p.code || '') + '</span> <i class="fa-solid fa-copy" aria-hidden="true"></i></button>' +
+                '</div>' +
+                (p.ad_marking ? '<p class="yandex-promo-ad">' + escapeHtml(p.ad_marking) + '</p>' : '') +
+                '</div>';
+        }
+        var marking = (!hasMarking && event.yandex_promo_ad_marking)
+            ? '<p class="yandex-promo-ad">' + escapeHtml(event.yandex_promo_ad_marking) + '</p>'
+            : '';
+        return '<div class="yandex-promo-box"><h2>Скидки на билеты</h2>' +
+            '<p class="yandex-promo-sub">Вводить промокод нужно в мобильном приложении Яндекс.Афиша.</p>' + items + marking + '</div>';
+    }
+
+    function copyMapPromoCode(btn) {
+        var code = btn.getAttribute('data-code') || '';
+        var all = state.balloonEl.querySelectorAll('.yandex-promo-code');
+        for (var i = 0; i < all.length; i++) {
+            if (all[i] !== btn) {
+                all[i].classList.remove('copied');
+                var ot = all[i].querySelector('.yandex-promo-code-text');
+                if (ot) ot.textContent = all[i].getAttribute('data-code') || '';
+            }
+        }
+        var label = btn.querySelector('.yandex-promo-code-text');
+        function done() {
+            btn.classList.add('copied');
+            if (label) label.textContent = 'Скопировано!';
+        }
+        function fallback() {
+            var ta = document.createElement('textarea');
+            ta.value = code;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
+            done();
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(done, fallback);
+        } else {
+            fallback();
+        }
+    }
+
     function buildTicketButton(event) {
         var url = event.tickets;
         if (!url) return '';
-        var brand = normalizeTicketBrand(event.ticket_brand || event.ticket_vendor) || guessTicketBrand(url);
+        var brand = eventTicketBrand(event);
         var meta = TICKET_BRAND_META[brand] || null;
         var label = event.price === 0 ? 'Бесплатно'
             : 'Купить билеты' + (event.price > 0 ? ' от ' + event.price + ' ₽' : '');
@@ -1056,12 +1191,14 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
     function buildBalloonDetails(event) {
         var hasLoader = typeof window.PermLiveMapDetailLoader === 'function';
         var descHtml = balloonDescHtml(event);
+        var promos = buildYandexPromosHtml(event);
         var ticket = buildTicketButton(event);
-        if (!descHtml && !ticket && !hasLoader) return '';
+        if (!descHtml && !ticket && !promos && !hasLoader) return '';
         var inner = '';
         if (descHtml) inner += '<div class="pl-map-balloon__desc">' + descHtml + '</div>';
+        if (promos) inner += promos;
         if (ticket) inner += ticket;
-        if (!descHtml && !ticket) {
+        if (!descHtml && !ticket && !promos) {
             inner = '<p class="pl-map-balloon__desc pl-map-balloon__desc--pending">Загрузка…</p>';
         }
         return '<div class="pl-map-balloon__details">' + inner + '</div>';
@@ -1129,6 +1266,12 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
                 if (!event.ticket_brand && info.ticket_brand) {
                     event.ticket_brand = normalizeTicketBrand(info.ticket_brand);
                 }
+                if (info.yandex_promocodes && info.yandex_promocodes.length && !event.yandex_promocodes) {
+                    event.yandex_promocodes = info.yandex_promocodes;
+                }
+                if (info.yandex_promo_ad_marking && !event.yandex_promo_ad_marking) {
+                    event.yandex_promo_ad_marking = info.yandex_promo_ad_marking;
+                }
             }
             if (state.balloonOpenId !== null && String(state.balloonOpenId) === String(event.id)) {
                 refreshBalloonContent(event);
@@ -1159,6 +1302,10 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
         var likeBtn = state.balloonEl.querySelector('.pl-map-balloon__like[data-like-id]');
         if (likeBtn) {
             likeBtn.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); toggleMapLike(event, likeBtn); });
+        }
+        var promoBtns = state.balloonEl.querySelectorAll('.yandex-promo-code');
+        for (var i = 0; i < promoBtns.length; i++) {
+            promoBtns[i].addEventListener('click', function () { copyMapPromoCode(this); });
         }
     }
 
@@ -2366,7 +2513,7 @@ var CUSTOMIZATION = (window.PermLiveMaps && window.PermLiveMaps.customization) |
 
         var initCenter = averageCoords();
         var map = new ymaps3.YMap(state.mapEl, {
-            location: { center: initCenter, zoom: defaultZoomFor(eventPool(), initCenter) },
+            location: { center: initCenter, zoom: defaultZoomFor(cameraPool(), initCenter) },
 
             mode: 'raster',
             theme: 'light',
