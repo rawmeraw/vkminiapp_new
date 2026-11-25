@@ -756,6 +756,10 @@ body.pl-map-fs #map {
 .pl-map-balloon__tag[data-type="hard"] { background: hsla(24, 90%, 89%, 0.7); color: #a04a10; }
 .pl-map-balloon__tag[data-type="academic"] { background: hsla(95, 55%, 88%, 0.7); color: #4c6b12; }
 .pl-map-balloon__tag[data-type="pop"] { background: hsla(190, 72%, 90%, 0.7); color: #0a5d6d; }
+.pl-map-balloon__tag[data-type="cinema"] { background: hsla(220, 65%, 90%, 0.7); color: #1d4076; }
+.pl-map-balloon__tag[data-type="theater"] { background: hsla(335, 70%, 93%, 0.7); color: #7a1140; }
+.pl-map-balloon__tag[data-type="standup"] { background: hsla(48, 95%, 87%, 0.7); color: #8a6d00; }
+.pl-map-balloon__tag[data-type="culture"] { background: hsla(258, 75%, 92%, 0.7); color: #5b3bb5; }
 .pl-map-balloon__tag[data-type="other"] { background: hsla(215, 10%, 88%, 0.7); color: #555; }
 
 .pl-map-balloon__place {

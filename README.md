@@ -2,6 +2,14 @@
 
 Валидное мини-приложение ВКонтакте, стилизованное как текущий сайт permlive.ru.
 
+> **Деплой**: приложение хостится в отдельном репозитории
+> `github.com/rawmeraw/vkminiapp_new` (GitHub Pages,
+> `https://rawmeraw.github.io/vkminiapp_new/`). Эта копия в monorepo —
+> источник правды; после правок синхронизируйте её в тот репозиторий
+> (`rsync -a --delete vkminiapp_new/ <клон репо>/ && git push`) —
+> `deploy.sh` permlive её НЕ публикует. Telegram Mini App (`tgapp/`)
+> деплоится иначе — его отдаёт `permlive.ru/tgapp/` через Django.
+
 ## Что внутри
 
 - **Вкладка «Афиша»**
