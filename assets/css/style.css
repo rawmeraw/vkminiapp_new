@@ -219,6 +219,17 @@ body.map-fullscreen #app,body.pl-map-fs #app{overflow:visible !important}
 .top-10 .card-rating{border-radius:8px;background:rgba(255,255,255,.9);padding:3px 8px}
 .card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
 .card-tags{display:flex;gap:6px}
+/* Чипы промокодов Яндекс Афиши на карточках (тап = копирование кода).
+   Специфичность .card-promos .card-promo-chip выше, чем у .vk-promo-code
+   в блоке деталки — чипы не наследуют большие стили промо-кнопки. */
+.card-promos{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.card-promos .card-promo-chip{font-family:monospace;font-size:10px;font-weight:700;letter-spacing:.03em;color:#7a4a00;background:#fff3d6;border:1px dashed #d9a441;border-radius:999px;padding:2px 8px;cursor:pointer;line-height:1.5;gap:0}
+.card-promos .card-promo-chip:hover{background:#ffe9b8}
+.card-promos .card-promo-chip.copied{background:#d7f5d7;border-color:#4caf50;color:#1b5e20}
+.card-promos .card-promo-chip .vk-promo-code-text{font-size:10px}
+/* «Цена снизилась»: зачёркнутая старая цена */
+.card-price-drop s{color:#999;font-weight:400}
+.card-price-drop{color:#c62828;font-weight:700;white-space:nowrap}
 .tag{font-size:10px;font-weight:500;background:rgba(255,255,255,.6);padding:3px 7px;border-radius:999px;display:inline-flex;align-items:center;gap:4px}
 .tag-count{opacity:.6;font-weight:400}
 .see-all-card{justify-content:center;align-items:center}

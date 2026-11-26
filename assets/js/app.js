@@ -36,6 +36,10 @@ const els = {
   sliderPromo: $('#slider-promo'),
   promoBadge: $('#promo-badge'),
   promoTitleLink: $('#promo-title-link'),
+  priceDropRow: $('#price-drop-row'),
+  sliderPriceDrop: $('#slider-pricedrop'),
+  priceDropBadge: $('#pricedrop-badge'),
+  priceDropTitleLink: $('#pricedrop-title-link'),
   calOverlay: $('#cal-overlay'),
   calModal: $('#cal-modal'),
   top10Row: $('#top10-row'),
@@ -363,6 +367,11 @@ const state = {
   forYouPool: [],
   promoPool: [],
   freePool: [],
+  priceDropDeals: [],
+  priceDropPool: [],
+  priceDropTotal: 0,
+  yandexPromos: [],
+  promoSlugSet: new Set(),
   promoTotal: 0,
   vkUserId: null,
   vkName: '',
@@ -375,7 +384,7 @@ const state = {
   map: null,
   mapMarkers: [],
   mapMode: 'all',
-  mapVertical: 'all',
+  mapVertical: 'music',
   todayISO: ekbTodayISO(),
   timelineMode: null,
   detailSlug: null,
@@ -849,6 +858,10 @@ async function switchCity(slug, opts){
   state.forYouPool=[];
   state.promoPool=[];
   state.freePool=[];
+  state.priceDropDeals=[];
+  state.priceDropPool=[];
+  state.priceDropTotal=0;
+  state.promoSlugSet=new Set();
   state.promoTotal=0;
   state.hasForYou=false;
   state.fullLoaded=false;
@@ -1170,6 +1183,12 @@ function rebuildPools(){
     }catch(e){ return false; }
   }).sort((a,b)=> parseFloat(b.cached_rating||0)-parseFloat(a.cached_rating||0) || a.date.localeCompare(b.date));
   state.promoTotal = state.promoPool.length;
+  // Слаги концертов с яндекс-промокодами — для чипов на карточках слайдеров.
+  state.promoSlugSet = new Set(state.promoPool.map(c=>c.slug).filter(Boolean));
+  // «Цена снизилась»: пул хранится сырым (priceDropDeals), здесь —
+  // только вертикальный фильтр, как у остальных пулов.
+  state.priceDropPool = (state.priceDropDeals||[]).filter(vertPass);
+  state.priceDropTotal = state.priceDropPool.length;
   // Бесплатные: будущие концерты с price=0 — как /timeline/free/ на сайте
   state.freePool = future.filter(c=> c.price !== '' && Number(c.price) === 0)
     .sort((a,b)=> a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
@@ -1240,6 +1259,22 @@ async function loadData(){
   try{ renderCalendarStrip(); applyFilter(); }catch(e){ console.warn('early paint failed', e); }
   // Фаза 2 — полный пул фоном: точный счётчик, таймлайны, фильтры по датам/поиск
   await fillFullPool(seen);
+  // «Цена снизилась» — слайдер как на сайте (/api/concerts/?price_drops=1).
+  // Пул сырой (priceDropDeals), vertPass-фильтр — в rebuildPools/ниже.
+  try{
+    const pdRes = await cachedFetch(ck('pl2_pricedrop_'), `${API_BASE}/api/concerts/?${cityQuery()}&price_drops=1&short=1&limit=30`, 10*60*1000);
+    const pdRaw = Array.isArray(pdRes) ? pdRes : ((pdRes && pdRes.results) || []);
+    state.priceDropDeals = pdRaw.map(normalizeApiConcert).filter(c=>c.slug && c.date);
+  }catch(e){ state.priceDropDeals=[]; }
+  state.priceDropPool = state.priceDropDeals.filter(vertPass);
+  state.priceDropTotal = state.priceDropPool.length;
+  // Промокоды Яндекс Афиши — глобальный список для чипов на карточках
+  // (атрибуция у Яндекса идёт по промокоду, а не по ссылке).
+  try{
+    const pr = await cachedFetch('pl2_yapromos_', `${API_BASE}/api/yandex-promocodes/`, 6*60*60*1000);
+    state.yandexPromos = (pr && pr.promocodes) || [];
+  }catch(e){ state.yandexPromos=[]; }
+  try{ renderSliders(); applyFilter(); }catch(e){}
   // VK рекомендации — если пользователь привязан через allauth.
   // LaunchParams берём первыми: в них vk_user_id + sign для подписи лайков.
   try{
@@ -1372,6 +1407,9 @@ function normalizeApiConcert(c){
     cached_rating: String(c.cached_rating||c.rating||c.display_rating||'3.0'), display_rating: String(c.display_rating||c.rating||c.cached_rating||'3.0'),
     reviews_count: Number(c.reviews_count||0), reviews_avg: (c.reviews_avg==null?null:parseFloat(c.reviews_avg)),
     is_paid: !!c.is_paid, tickets:c.tickets||'', link:c.link||'',
+    old_price: c.old_price!=null? Number(c.old_price): null,
+    new_price: c.new_price!=null? Number(c.new_price): null,
+    drop_rub: c.drop_rub!=null? Number(c.drop_rub): null,
     tags: c.tags||[], description:c.description||'', description_html: c.description_html||'', bands: c.bands||[], similar: (c.similar||[]).map(normalizeApiConcertLight),
     yandex_promocodes: c.yandex_promocodes||[], yandex_promo_ad_marking: c.yandex_promo_ad_marking||'',
     is_pushkin_card: !!c.is_pushkin_card, pushkin_promo_link: c.pushkin_promo_link||'', pushkin_ad_marking: c.pushkin_ad_marking||''
@@ -1642,10 +1680,29 @@ function fmtUpcomingDate(d, timeStr){
   return fmtShortDate(d);
 }
 
+// Чипы промокодов Яндекс Афиши на карточках слайдеров: показываем только
+// концертам из promoPool (яндекс-билеты от 1000 ₽). Тап — копирование кода
+// (preventDefault, чтобы не сработал переход на деталку).
+function promoChipsHTML(c){
+  if(!c || !c.slug) return '';
+  if(!(state.promoSlugSet && state.promoSlugSet.has(c.slug))) return '';
+  const promos = state.yandexPromos || [];
+  if(!promos.length) return '';
+  const chips = promos.slice(0,4).map(p=>{
+    const code = p.code || '';
+    if(!code) return '';
+    const tip = [p.discount_text, 'при заказе от '+(p.min_price||0)+' ₽',
+      p.new_only ? 'только для новых' : 'для всех'].filter(Boolean).join(' · ');
+    return `<button type="button" class="card-promo-chip vk-promo-code" data-code="${esc(code)}" title="${esc(tip)} — нажмите, чтобы скопировать" onclick="event.preventDefault();copyVkPromo(this)"><span class="vk-promo-code-text">${esc(code)}</span></button>`;
+  }).join('');
+  return chips ? `<div class="card-promos">${chips}</div>` : '';
+}
+
 function cardHTML(c, opts={}){
   const isTop10 = !!opts.rank;
   const isUpcoming = opts.mode==='upcoming';
   const isDateSlider = opts.mode==='date';
+  const isPriceDrop = opts.mode==='pricedrop';
   const rank=opts.rank? `<div class="card-rank">${opts.rank}</div>`:'';
   const ratingVal = c.display_rating||c.cached_rating||'';
   const ratingNum = parseFloat(c.cached_rating||0);
@@ -1656,7 +1713,11 @@ function cardHTML(c, opts={}){
   } else {
     if(ratingVal && ratingNum>=4) ratingBadge = `<div class="card-rating-badge ${ratingNum>=5?'featured':''}"><i class="fa-solid fa-star"></i> ${esc(ratingVal)}</div>`;
   }
-  const priceTag = c.price===0? 'бесплатно' : c.price? `${c.price}₽`: '';
+  let priceTag = c.price===0? 'бесплатно' : c.price? `${c.price}₽`: '';
+  // «Цена снизилась»: зачёркнутая старая цена + новая (как на сайте).
+  if(isPriceDrop && c.old_price && c.price){
+    priceTag = `<span class="card-price-drop"><s>${esc(String(c.old_price))}₽</s> ${esc(String(c.price))}₽</span>`;
+  }
   let tagHtml='';
   if(!isTop10){
     if(c.tags && c.tags.length){
@@ -1690,6 +1751,7 @@ function cardHTML(c, opts={}){
       <h3 class="card-title">${esc(c.title)}</h3>
       <div class="card-meta">${esc(dateText)} › ${venue}${priceTag? ' · '+priceTag:''}</div>
       ${ratingInfo}
+      ${promoChipsHTML(c)}
       <div class="card-footer"><div class="card-tags">${tagHtml}</div></div>
     </div>
   </a>`;
@@ -1724,6 +1786,7 @@ function renderSliders(){
     els.sliderUpcoming.style.display='none';
     if(els.sliderForyou) els.sliderForyou.style.display='none';
     if(els.sliderPromo) els.sliderPromo.style.display='none';
+    if(els.sliderPriceDrop) els.sliderPriceDrop.style.display='none';
     els.dateTitleText.textContent=title;
     renderSlider(els.sliderDate, els.dateRow, list, total, 'date', title);
     els.dateTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('date')};
@@ -1780,6 +1843,19 @@ function renderSliders(){
         }
       }
     }
+    // «Цена снизилась» — ниже промокодов
+    if(els.sliderPriceDrop){
+      const shouldShowDrop = state.priceDropPool.length>0;
+      els.sliderPriceDrop.style.display = shouldShowDrop ? '' : 'none';
+      if(shouldShowDrop){
+        renderSlider(els.sliderPriceDrop, els.priceDropRow, state.priceDropPool, state.priceDropTotal, 'pricedrop', 'Цена снизилась');
+        if(els.priceDropTitleLink) els.priceDropTitleLink.onclick=(e)=>{e.preventDefault(); openTimeline('pricedrop')};
+        if(els.priceDropBadge){
+          if(state.priceDropTotal>10){ els.priceDropBadge.textContent=`Смотреть все ${state.priceDropTotal}`; els.priceDropBadge.style.display='inline-flex'; els.priceDropBadge.onclick=(e)=>{e.preventDefault(); openTimeline('pricedrop')}; }
+          else els.priceDropBadge.style.display='none';
+        }
+      }
+    }
   } else {
     // timeline mode: hide all sliders
     els.sliderDate.style.display='none';
@@ -1787,6 +1863,7 @@ function renderSliders(){
     els.sliderUpcoming.style.display='none';
     if(els.sliderForyou) els.sliderForyou.style.display='none';
     if(els.sliderPromo) els.sliderPromo.style.display='none';
+    if(els.sliderPriceDrop) els.sliderPriceDrop.style.display='none';
     els.timelineWrap.style.display='';
   }
 }
@@ -1989,6 +2066,7 @@ function getTimelineTitle(){
   }
   if(state.timelineMode==='foryou') return 'Рекомендации для вас';
   if(state.timelineMode==='promo') return 'Промокоды на билеты';
+  if(state.timelineMode==='pricedrop') return 'Цена снизилась';
   if(state.timelineMode==='free') return 'Бесплатные концерты';
   if(state.timelineMode==='weekend') return 'Концерты на выходные';
   if(state.timelineMode==='upcoming') return 'Ближайшие события';
@@ -2010,6 +2088,8 @@ function applyFilter(){
     list = [...state.forYouPool].slice(0,80);
   } else if(state.timelineMode==='promo'){
     list = [...state.promoPool].slice(0,80);
+  } else if(state.timelineMode==='pricedrop'){
+    list = [...state.priceDropPool].slice(0,80);
   } else if(state.timelineMode==='free'){
     list = state.freePool.slice();
   } else if(state.timelineMode==='upcoming'){
@@ -2715,7 +2795,7 @@ function appEventVertical(c){
 }
 const MAP_VERT_KEY='pl2_map_vertical';
 function vertPass(c){
-  const v = state.mapVertical || 'all';
+  const v = state.mapVertical || 'music';
   if(v==='all') return true;
   return appEventVertical(c)===v;
 }
@@ -2738,7 +2818,7 @@ const VERT_META={
   cinema:{label:'Кино',icon:'fa-film'}
 };
 function syncAfishaUI(){
-  const v=state.mapVertical||'all';
+  const v=state.mapVertical||'music';
   const meta=VERT_META[v]||VERT_META.all;
   const lb=document.getElementById('afisha-dropdown-label'); if(lb) lb.textContent=meta.label;
   const ic=document.getElementById('afisha-dropdown-icon'); if(ic) ic.className='fas '+meta.icon;
@@ -2752,8 +2832,9 @@ function syncAfishaUI(){
 function initAfishaControls(){
   if(window._afishaWired) { syncAfishaUI(); return; }
   window._afishaWired=true;
-  try{ state.mapVertical=localStorage.getItem(MAP_VERT_KEY)||'all'; }catch(e){ state.mapVertical='all'; }
-  if(!['all','music','show','cinema'].includes(state.mapVertical)) state.mapVertical='all';
+  // Дефолт — «Концерты» (music): выбор пользователя в localStorage важнее.
+  try{ state.mapVertical=localStorage.getItem(MAP_VERT_KEY)||'music'; }catch(e){ state.mapVertical='music'; }
+  if(!['all','music','show','cinema'].includes(state.mapVertical)) state.mapVertical='music';
   const dd=document.getElementById('afisha-dropdown');
   const db=document.getElementById('afisha-dropdown-btn');
   if(dd&&db){
@@ -3233,6 +3314,10 @@ function wire(){
 (async function boot(){
   wire();
   try{ if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncTimelineStickyOffsets); }catch(e){}
+  // Вертикаль афиши — ДО loadData: выбор из localStorage (дефолт «Концерты»)
+  // должен фильтровать первый же пул, иначе «Все/Театры/Кино» не применялись
+  // до первого открытия карты (initAfishaControls вызывался только оттуда).
+  try{ initAfishaControls(); }catch(e){}
   // календарь в хедере сразу красный (feed активен)
   switchTab('feed', true);
   // город как на сайте: запомненный — сразу; иначе дефолт + фоновая геопроверка
