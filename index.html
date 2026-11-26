@@ -23,7 +23,7 @@
   <!-- Yandex Maps JS API v3 — ключ только для vkminiapp_new -->
   <script>window.PermLiveMapSettings={apiKey:'30ae02d3-cd24-4741-849d-947b8c46c1a9'};window.PermLiveMapData={events:[],today:'',defaultDate:'',csrf:'',mapUser:{is_auth:false}};</script>
 
-  <link rel="stylesheet" href="./assets/css/style.css?v=20261126a">
+  <link rel="stylesheet" href="./assets/css/style.css?v=20261127a">
   <link rel="stylesheet" href="./assets/css/maps.css?v=20261205b">
 </head>
 <body>
@@ -61,9 +61,8 @@
           <i class="fa-solid fa-chevron-down sections-dropdown-chevron"></i>
         </button>
         <div class="sections-dropdown-menu" id="afisha-dropdown-menu" role="menu">
-          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="all" role="menuitem"><i class="fas fa-layer-group"></i><span>Все события</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
           <button type="button" class="sections-dropdown-item afisha-opt active" data-vert="music" role="menuitem"><i class="fas fa-music"></i><span>Концерты</span><i class="fa-solid fa-check afisha-check"></i></button>
-          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="show" role="menuitem"><i class="fas fa-theater-masks"></i><span>Театры</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
+          <button type="button" class="sections-dropdown-item afisha-opt" data-vert="show" role="menuitem"><i class="fas fa-theater-masks"></i><span>Театры и шоу</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
           <button type="button" class="sections-dropdown-item afisha-opt" data-vert="cinema" role="menuitem"><i class="fas fa-film"></i><span>Кино</span><i class="fa-solid fa-check afisha-check" style="display:none"></i></button>
         </div>
       </div>
@@ -94,6 +93,17 @@
 
       <!-- Feed Sliders -->
       <div id="feed-sliders">
+
+        <!-- Премьеры недели — только вертикали «Театры и шоу»/«Кино» -->
+        <div class="horizontal-slider premiere" id="slider-premiere" style="display:none">
+          <h2 class="section-title">
+            <a class="section-header-wrapper" id="premiere-title-link" href="#"><i id="premiere-title-icon" class="fas fa-theater-masks"></i> <span id="premiere-title-text">Премьеры недели</span></a>
+            <a class="section-count-badge" id="premiere-badge" style="display:none"></a>
+          </h2>
+          <div class="horizontal-slider-row" id="premiere-row"></div>
+          <div class="horizontal-slider-arrow left hidden"><i class="fas fa-chevron-left"></i></div>
+          <div class="horizontal-slider-arrow right hidden"><i class="fas fa-chevron-right"></i></div>
+        </div>
 
         <!-- Top-10 -->
         <div class="horizontal-slider top-10" id="slider-top10">
@@ -257,9 +267,8 @@
 
   <!-- Переключатель типа афиши — мобильный футер (десктоп — дропдаун в хедере) -->
   <div class="vert-bar" id="vert-bar" role="group" aria-label="Тип афиши">
-    <button type="button" class="vert-pill" data-vert="all" style="--vp:#64748b"><i class="fas fa-layer-group"></i><span>Все</span></button>
     <button type="button" class="vert-pill is-active" data-vert="music" style="--vp:#e14425"><i class="fas fa-music"></i><span>Концерты</span></button>
-    <button type="button" class="vert-pill" data-vert="show" style="--vp:#5f4a33"><i class="fas fa-theater-masks"></i><span>Театры</span></button>
+    <button type="button" class="vert-pill" data-vert="show" style="--vp:#5f4a33"><i class="fas fa-theater-masks"></i><span>Театры и шоу</span></button>
     <button type="button" class="vert-pill" data-vert="cinema" style="--vp:#1d4076"><i class="fas fa-film"></i><span>Кино</span></button>
   </div>
 
@@ -268,6 +277,6 @@
 
   <script src="./assets/js/maps/map-core.js?v=20260910" defer></script>
   <script src="./assets/js/maps/events-map.js?v=20261205" defer></script>
-  <script type="module" src="./assets/js/app.js?v=20261126a"></script>
+  <script type="module" src="./assets/js/app.js?v=20261127a"></script>
 </body>
 </html>

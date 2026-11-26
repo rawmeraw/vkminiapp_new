@@ -480,6 +480,15 @@ body.vk-no-account .pl-map-balloon__like{display:none !important}
 .vk-pushkin-sub{margin:0 0 10px;color:#222;font-size:13px}
 .vk-pushkin-link{color:var(--red);font-size:14px}
 .vk-pushkin-ad{margin:10px 0 0;color:#999;font-size:11px}
+/* «Другие сеансы» на деталке — зеркало other-sessions на сайте */
+.detail__sessions{margin-top:16px}
+.detail__sessions>h3{font-size:16px;margin:0 0 8px}
+.detail-sessions-group{margin-bottom:10px}
+.detail-sessions-place{font-weight:600;font-size:13px;color:#333}
+.detail-sessions-times{display:flex;flex-wrap:wrap;align-items:center;margin-top:2px}
+.detail-session-link{color:var(--red);text-decoration:none;font-weight:500;font-size:13px;padding:2px 2px;white-space:nowrap}
+.detail-session-link:hover{text-decoration:underline}
+.detail-session-sep{color:#ccc;margin:0 4px;font-size:12px}
 .detail__similar{margin-top:20px}
 .detail__similar>h3{font-size:16px;margin:0 0 8px}
 .detail__similar .card-title{font-size:13px}
